@@ -25,10 +25,8 @@ import importlib
 @click.command()
 @click.argument('game_name', type = click.STRING)
 @click.argument('agent_class', type = click.STRING)
-@click.argument('save_prefix', type = click.STRING)
-@click.argument('save_path', type=click.Path())
 @click.argument('training_episodes', type=click.INT, default = 100001)
-def main(game_name, agent_class, save_prefix, save_path, training_episodes):
+def main(game_name, agent_class, training_episodes):
     project_dir = Path(__file__).resolve().parents[2]
     game = game_name
     num_players = 2
@@ -48,9 +46,8 @@ def main(game_name, agent_class, save_prefix, save_path, training_episodes):
 
     with trange(training_episodes) as t:
         for cur_episode in t:
-            #print(agents)
             if cur_episode % int(1e4) == 0:
-                filename = f"{project_dir}/models/agents/{save_path}/{save_prefix}_{cur_episode}.agent"
+                filename = f"{project_dir}/models/games/{game_name}/{class_name}:{cur_episode}.agent"
                 joblib.dump(agents, filename)
 
 
@@ -60,14 +57,12 @@ def main(game_name, agent_class, save_prefix, save_path, training_episodes):
 
             time_step = env.reset()
             while not time_step.last():
-                state = time_step.observations["info_state"]
-                state = np.array(state)
-                #print(state.shape)
+                #state = time_step.observations["info_state"]
                 player_id = time_step.observations["current_player"]
                 agent_output = agents[player_id].step(time_step)
                 time_step = env.step([agent_output.action])
 
-            # Episode is over, step all agents with final info state.
+            # Episode is over, step all games with final info state.
             for agent in agents:
                 agent.step(time_step)
 

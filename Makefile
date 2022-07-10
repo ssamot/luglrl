@@ -10,6 +10,8 @@ PROFILE = default
 PROJECT_NAME = fastrl
 PYTHON_INTERPRETER = python3
 
+TABULAR_Q_AGENT = open_spiel.python.algorithms.tabular_qlearner.QLearner
+
 ifeq (,$(shell which conda))
 HAS_CONDA=False
 else
@@ -26,27 +28,23 @@ requirements: test_environment
 	$(PYTHON_INTERPRETER) -m pip install -r requirements.txt
 
 ## Make Dataset
-data: requirements
-	$(PYTHON_INTERPRETER) src/data/make_dataset.py data/raw data/processed
-
-## Make Dataset
 Q_TTT:
-	$(PYTHON_INTERPRETER) src/models/train_model.py tic_tac_toe open_spiel.python.algorithms.tabular_qlearner.QLearner tabularQ ttt 200001
+	$(PYTHON_INTERPRETER) src/models/train_agents.py tic_tac_toe ${TABULAR_Q_AGENT}  200001
 
 Q_C4:
-	$(PYTHON_INTERPRETER) src/models/train_model.py connect_four open_spiel.python.algorithms.tabular_qlearner.QLearner tabularQ connect4 200001
+	$(PYTHON_INTERPRETER) src/models/train_agents.py connect_four ${TABULAR_Q_AGENT}  200001
 
 TOURNAMENT_C4:
-	$(PYTHON_INTERPRETER) src/models/run_tournament.py connect_four connect4 1000
+	$(PYTHON_INTERPRETER) src/models/run_tournament.py connect_four 1000
 
 TOURNAMENT_TTT:
-	$(PYTHON_INTERPRETER) src/models/run_tournament.py tic_tac_toe ttt 1000
+	$(PYTHON_INTERPRETER) src/models/run_tournament.py tic_tac_toe 2000
 
 GLICKO_TTT:
-	$(PYTHON_INTERPRETER) src/visualization/calculate_glicko2_scores.py data/interim/ttt.csv
+	$(PYTHON_INTERPRETER) src/visualization/calculate_glicko2_scores.py data/interim/tic_tac_toe.csv
 
 GLICKO_C4:
-	$(PYTHON_INTERPRETER) src/visualization/calculate_glicko2_scores.py data/interim/connect4.csv
+	$(PYTHON_INTERPRETER) src/visualization/calculate_glicko2_scores.py data/interim/connect_four.csv
 
 
 ## Delete all compiled Python files
