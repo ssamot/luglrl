@@ -8,6 +8,7 @@ import random
 from tqdm import tqdm
 from open_spiel.python.algorithms import random_agent
 import click
+from tqdm import trange
 
 
 
@@ -28,11 +29,9 @@ def eval_against_random_bots(env, trained_agents, random_agents, num_episodes):
                 agent_output = cur_agents[player_id].step(time_step,
                                                           is_evaluation=True)
                 time_step = env.step([agent_output.action])
-           # print(time_step.rewards[player_pos])
-            #if time_step.rewards[player_pos] > 0:
+
             wins[player_pos].append(time_step.rewards[player_pos])
-            #else:
-            #    wins[player_pos].append(0)
+
     return wins
 
 
@@ -58,12 +57,17 @@ def main(game_name, n_games):
         project_dir = Path(__file__).resolve().parents[2]
 
 
-
+        print("Loading agents...")
         agents = {"Random:-10000":random_agents}
-        for file in glob.glob(f"{project_dir}/models/games/{game_name}/*.agent"):
-            name = Path(file).name
-            stem = name.split(".")[0]
-            agents[stem] = joblib.load(file)
+        files = list(glob.glob(f"{project_dir}/models/games/{game_name}/*.agent"))
+        with trange(len(files)) as t:
+            for i in t:
+                file = files[i]
+                name = Path(file).name
+                stem = name.split(".")[0]
+                t.set_description(f"Loading {stem}")
+                agents[stem] = joblib.load(file)
+
 
         if(len(agents) == 1):
             exit("No agents to play against!")

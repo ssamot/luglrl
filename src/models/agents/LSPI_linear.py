@@ -61,10 +61,10 @@ class LSPILearner(rl_agent.AbstractAgent):
 
         self._prev_info_state = None
         self._last_loss_value = None
+        self.w = None
+        self.b = None
         self._reset_dict()
         self._n_games = 0
-        self.episode_length = 0
-        self.model = None
 
     def __getstate__(self):
         state = dict(self.__dict__)
@@ -79,7 +79,7 @@ class LSPILearner(rl_agent.AbstractAgent):
         self._q_values = keydefaultdict(self._default_value)
 
     def _default_value(self, key):
-        if(self.model is None):
+        if(self.w is None):
             return 0
         else:
             state_features, action = list(key[0]), list(key[1])[0]
@@ -87,12 +87,10 @@ class LSPILearner(rl_agent.AbstractAgent):
             if (action is not None):
                 action_features[action] = 1
             total_features = state_features + action_features
-            phi = np.array(total_features)[np.newaxis,:]
-            value = self.model(phi)
+            phi = total_features
+            value =  np.dot(phi,self.w) + self.b
             #print(value)
-
-            #print(value)
-            return value[0][0]
+            return value
 
     def _epsilon_greedy(self, info_state, legal_actions, epsilon):
         """Returns a valid epsilon-greedy action and valid action probs.
@@ -175,17 +173,15 @@ class LSPILearner(rl_agent.AbstractAgent):
 
             # Decay epsilon, if necessary.
             self._epsilon = self._epsilon_schedule.step()
-            self.episode_length+=1
+
             if time_step.last():  # prepare for the next episode.
                 self._prev_info_state = None
                 self._n_games +=1
-                #print(self.episode_length)
-                self.episode_length = 0
 
                 #print(self._n_games + 1, (self._n_games + 1) % 400)
                 res = ((self._n_games + 1) % 5000)
                 if ( res == 0):
-                    print("About to start training")
+
                     all_features = []
                     all_Qs = []
                     for key, q_value in self._q_values.items():
@@ -203,26 +199,35 @@ class LSPILearner(rl_agent.AbstractAgent):
                         # print(len(state_features), len(action_features), len(total_features))
                     X = np.array(all_features)
                     y = np.array(all_Qs)
-                    self._reset_dict()
-                    # clf = linear_model.LinearRegression(n_jobs = -1, normalize=False)
-                    # print("training...", X.shape, y.shape, len(self._q_values))
-                    # clf.fit(X, y)
-                    # self.w = clf.coef_
-                    # self.b = clf.intercept_
-                    #
-                    # mse = metrics.mean_squared_error(y, clf.predict(X))
-                    # r2 = metrics.explained_variance_score(y, clf.predict(X))
-                    # print(mse,r2)
-                    #if(self.model is None):
-                    self.model = build_model(X.shape[1])
-                    for i in range(200):
-                        self.model.fit(X,y, epochs = 1, verbose = True)
-                        mse = metrics.mean_squared_error(y, self.model.predict(X, verbose = False))
-                        r2 = metrics.explained_variance_score(y, self.model.predict(X,verbose = False))
 
-                        print(i, mse, r2)
-                        if (r2 > 0.85):
-                            break
+
+                    ## sample 10 features
+                    batch_size = 200
+                    sample = np.random.choice(len(all_features), batch_size)
+                    diff_boards = X[sample]
+
+                    features = []
+
+                    for feature in diff_boards:
+                        ds = np.linalg.norm(X - feature, axis=-1)[:, np.newaxis]
+                        features.append(ds)
+                        #ds = ds
+
+                    distance_features = np.concatenate(features, axis = -1)
+                    X = np.concatenate([X,distance_features], axis = -1)
+                    print(distance_features.shape, X.shape)
+                    #exit()
+
+                    self._reset_dict()
+                    clf = linear_model.LinearRegression(n_jobs = -1, normalize=False)
+                    print("training...", X.shape, y.shape, len(self._q_values))
+                    clf.fit(X, y)
+                    self.w = clf.coef_
+                    self.b = clf.intercept_
+
+                    mse = metrics.mean_squared_error(y, clf.predict(X))
+                    r2 = metrics.explained_variance_score(y, clf.predict(X))
+                    print(mse,r2)
 
 
 

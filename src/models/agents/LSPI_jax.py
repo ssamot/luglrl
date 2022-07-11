@@ -25,7 +25,7 @@ from open_spiel.python import rl_agent
 from open_spiel.python import rl_tools
 from sklearn import linear_model
 from sklearn import metrics
-from agents.nn import build_model
+from agents.jax_nn import JaxNN
 
 
 class keydefaultdict(collections.defaultdict):
@@ -88,7 +88,7 @@ class LSPILearner(rl_agent.AbstractAgent):
                 action_features[action] = 1
             total_features = state_features + action_features
             phi = np.array(total_features)[np.newaxis,:]
-            value = self.model(phi)
+            value = self.model.predict(phi)
             #print(value)
 
             #print(value)
@@ -214,9 +214,9 @@ class LSPILearner(rl_agent.AbstractAgent):
                     # r2 = metrics.explained_variance_score(y, clf.predict(X))
                     # print(mse,r2)
                     #if(self.model is None):
-                    self.model = build_model(X.shape[1])
+                    self.model = JaxNN()
                     for i in range(200):
-                        self.model.fit(X,y, epochs = 1, verbose = True)
+                        self.model.fit(X,y, epochs = 1)
                         mse = metrics.mean_squared_error(y, self.model.predict(X, verbose = False))
                         r2 = metrics.explained_variance_score(y, self.model.predict(X,verbose = False))
 

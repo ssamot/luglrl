@@ -27,7 +27,6 @@ def create_nn(input_shape, num_forms=2):
 
     for _ in range(num_forms):
         input = Input(shape=input_shape)
-        # x = keras.layers.BatchNormalization()(input)
         h_object = Hadamard()
         x = h_object(input)
         #x = keras.layers.BatchNormalization()(x)

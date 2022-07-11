@@ -48,11 +48,10 @@ def main(game_name, agent_class, training_episodes):
         for cur_episode in t:
             if cur_episode % int(1e4) == 0:
                 filename = f"{project_dir}/models/games/{game_name}/{class_name}:{cur_episode}.agent"
-                joblib.dump(agents, filename)
+                joblib.dump(agents, filename, compress = 3)
 
 
-            t.set_description(
-                'Epoch %i' % (cur_episode))
+            t.set_description(f"Game {cur_episode}")
 
 
             time_step = env.reset()
