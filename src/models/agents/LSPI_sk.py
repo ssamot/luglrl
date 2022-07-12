@@ -104,11 +104,11 @@ class LSPILearner(rl_agent.AbstractAgent):
                 action_features[action] = 1
             total_features = state_features + action_features
             phi = np.array(total_features)[np.newaxis,:]
-            value = self.model(phi)
+            value = self.model.predict(phi)
             #print(value)
 
             #print(value)
-            return value[0][0]
+            return value[0]
 
     def _epsilon_greedy(self, info_state, legal_actions, epsilon):
         """Returns a valid epsilon-greedy action and valid action probs.
@@ -226,24 +226,32 @@ class LSPILearner(rl_agent.AbstractAgent):
         X = np.array(all_features)
         y = np.array(all_Qs)
 
-        tweedie_pipeline = [("features", PolynomialFeatures()),
-                            ('scaler', StandardScaler()),
-                            ('clf', TweedieRegressor())]
+        # tweedie_pipeline = [("features", PolynomialFeatures()),
+        #                     ('scaler', StandardScaler()),
+        #                     ('clf', TweedieRegressor())]
+        #
+        # clf_tweedie = GridSearchCV(Pipeline(tweedie_pipeline), param_grid={
+        #     "clf__power": [0, 2, 3] + list(np.arange(1, 2, 0.1)),
+        #     "clf__alpha": [0.5, 0.1, 0.01, 0.001, 1, 2, 10, 20],
+        #     "features__degree": [1, 2],
+        #     "clf__max_iter": [10000]
+        # },
+        #                            n_jobs=2, cv=10,
+        #                            scoring="neg_mean_squared_error", verbose=100)
+        # clf_tweedie.fit(X,y)
 
-        clf_tweedie = GridSearchCV(Pipeline(tweedie_pipeline), param_grid={
-            "clf__power": [0, 2, 3] + list(np.arange(1, 2, 0.1)),
-            "clf__alpha": [0.5, 0.1, 0.01, 0.001, 1, 2, 10, 20],
-            "features__degree": [1, 2],
-            "clf__max_iter": [10000]
-        },
-                                   n_jobs=2, cv=10,
-                                   scoring="neg_mean_squared_error", verbose=100)
-        clf_tweedie.fit(X,y)
-        self.model = clf_tweedie.best_estimator_
-        mse = metrics.mean_squared_error(y, self.model.predict(X,
-                                                               verbose=False))
-        r2 = metrics.explained_variance_score(y, self.model.predict(X,
-                                                                    verbose=False))
+        # clf = GridSearchCV(DecisionTreeRegressor(),
+        #                    param_grid={
+        #                        "min_weight_fraction_leaf": [1 / (2 ** 3.5)]},
+        #                    n_jobs=-1, cv=10, scoring="neg_mean_squared_error")
+
+
+        clf = LassoLarsCV()
+
+        clf.fit(X,y)
+        self.model = clf
+        mse = metrics.mean_squared_error(y, self.model.predict(X))
+        r2 = metrics.explained_variance_score(y, self.model.predict(X))
 
         print(mse, r2)
 
