@@ -25,7 +25,21 @@ from open_spiel.python import rl_agent
 from open_spiel.python import rl_tools
 from sklearn import linear_model
 from sklearn import metrics
-from agents.jax_nn import JaxNN
+from agents.nn import build_model
+import keras
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.dummy import DummyRegressor
+from sklearn.model_selection import GridSearchCV
+from sklearn.linear_model import LassoLarsCV
+from sklearn.metrics import mean_squared_error
+
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import TweedieRegressor
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from joblib import dump
+from sklearn.preprocessing import PolynomialFeatures
 
 
 class keydefaultdict(collections.defaultdict):
@@ -49,7 +63,9 @@ class LSPILearner(rl_agent.AbstractAgent):
                  step_size=0.1,
                  epsilon_schedule=rl_tools.ConstantSchedule(0.2),
                  discount_factor=1.0,
-                 centralized=False):
+                 centralized=False,
+
+                 ):
         """Initialize the Q-Learning agent."""
         self._player_id = player_id
         self._num_actions = num_actions
@@ -88,7 +104,7 @@ class LSPILearner(rl_agent.AbstractAgent):
                 action_features[action] = 1
             total_features = state_features + action_features
             phi = np.array(total_features)[np.newaxis,:]
-            value = self.model.predict(phi)
+            value = self.model(phi)
             #print(value)
 
             #print(value)
@@ -164,6 +180,8 @@ class LSPILearner(rl_agent.AbstractAgent):
                     self._step_size * self._last_loss_value)
 
 
+
+
             self._epsilon = self._epsilon_schedule.step()
             self.episode_length+=1
             if time_step.last():  # prepare for the next episode.
@@ -172,47 +190,7 @@ class LSPILearner(rl_agent.AbstractAgent):
                 #print(self.episode_length)
                 self.episode_length = 0
 
-                #print(self._n_games + 1, (self._n_games + 1) % 400)
-                res = ((self._n_games + 1) % 5000)
-                if ( res == 0):
-                    print("About to start training")
-                    all_features = []
-                    all_Qs = []
-                    for key, q_value in self._q_values.items():
-                        if (q_value != 0):
-                            state_features, action_features = list(
-                                key[0]), list(key[1])
-                            action_features = list(
-                                np.zeros(shape=self._num_actions))
-                            if (action is not None):
-                                action_features[action] = 1
-                            total_features = state_features + action_features
-                            all_Qs.append(q_value)
-                            all_features.append(total_features)
 
-                        # print(len(state_features), len(action_features), len(total_features))
-                    X = np.array(all_features)
-                    y = np.array(all_Qs)
-                    self._reset_dict()
-                    # clf = linear_model.LinearRegression(n_jobs = -1, normalize=False)
-                    # print("training...", X.shape, y.shape, len(self._q_values))
-                    # clf.fit(X, y)
-                    # self.w = clf.coef_
-                    # self.b = clf.intercept_
-                    #
-                    # mse = metrics.mean_squared_error(y, clf.predict(X))
-                    # r2 = metrics.explained_variance_score(y, clf.predict(X))
-                    # print(mse,r2)
-                    #if(self.model is None):
-                    self.model = JaxNN()
-                    for i in range(200):
-                        self.model.fit(X,y, epochs = 1)
-                        mse = metrics.mean_squared_error(y, self.model.predict(X, verbose = False))
-                        r2 = metrics.explained_variance_score(y, self.model.predict(X,verbose = False))
-
-                        print(i, mse, r2)
-                        if (r2 > 0.85):
-                            break
 
 
 
@@ -228,4 +206,44 @@ class LSPILearner(rl_agent.AbstractAgent):
     @property
     def loss(self):
         return self._last_loss_value
+
+    def train_supervised(self):
+
+        print("About to start training")
+        all_features = []
+        all_Qs = []
+        for key, q_value in self._q_values.items():
+            if (q_value != 0):
+                state_features, action_features = list(
+                    key[0]), list(key[1])
+                action_features = list(
+                    np.zeros(shape=self._num_actions))
+                total_features = state_features + action_features
+                all_Qs.append(q_value)
+                all_features.append(total_features)
+
+            # print(len(state_features), len(action_features), len(total_features))
+        X = np.array(all_features)
+        y = np.array(all_Qs)
+
+        tweedie_pipeline = [("features", PolynomialFeatures()),
+                            ('scaler', StandardScaler()),
+                            ('clf', TweedieRegressor())]
+
+        clf_tweedie = GridSearchCV(Pipeline(tweedie_pipeline), param_grid={
+            "clf__power": [0, 2, 3] + list(np.arange(1, 2, 0.1)),
+            "clf__alpha": [0.5, 0.1, 0.01, 0.001, 1, 2, 10, 20],
+            "features__degree": [1, 2],
+            "clf__max_iter": [10000]
+        },
+                                   n_jobs=2, cv=10,
+                                   scoring="neg_mean_squared_error", verbose=100)
+        clf_tweedie.fit(X,y)
+        self.model = clf_tweedie.best_estimator_
+        mse = metrics.mean_squared_error(y, self.model.predict(X,
+                                                               verbose=False))
+        r2 = metrics.explained_variance_score(y, self.model.predict(X,
+                                                                    verbose=False))
+
+        print(mse, r2)
 

@@ -26,6 +26,7 @@ from open_spiel.python import rl_tools
 from sklearn import linear_model
 from sklearn import metrics
 from agents.nn import build_model
+import keras
 
 
 class keydefaultdict(collections.defaultdict):
@@ -49,7 +50,9 @@ class LSPILearner(rl_agent.AbstractAgent):
                  step_size=0.1,
                  epsilon_schedule=rl_tools.ConstantSchedule(0.2),
                  discount_factor=1.0,
-                 centralized=False):
+                 centralized=False,
+
+                 ):
         """Initialize the Q-Learning agent."""
         self._player_id = player_id
         self._num_actions = num_actions
@@ -166,14 +169,6 @@ class LSPILearner(rl_agent.AbstractAgent):
 
 
 
-                #print(X.shape, y.shape)
-            #
-            #
-            #
-            #
-            # exit()
-
-            # Decay epsilon, if necessary.
             self._epsilon = self._epsilon_schedule.step()
             self.episode_length+=1
             if time_step.last():  # prepare for the next episode.
@@ -182,47 +177,7 @@ class LSPILearner(rl_agent.AbstractAgent):
                 #print(self.episode_length)
                 self.episode_length = 0
 
-                #print(self._n_games + 1, (self._n_games + 1) % 400)
-                res = ((self._n_games + 1) % 5000)
-                if ( res == 0):
-                    print("About to start training")
-                    all_features = []
-                    all_Qs = []
-                    for key, q_value in self._q_values.items():
-                        if (q_value != 0):
-                            state_features, action_features = list(
-                                key[0]), list(key[1])
-                            action_features = list(
-                                np.zeros(shape=self._num_actions))
-                            if (action is not None):
-                                action_features[action] = 1
-                            total_features = state_features + action_features
-                            all_Qs.append(q_value)
-                            all_features.append(total_features)
 
-                        # print(len(state_features), len(action_features), len(total_features))
-                    X = np.array(all_features)
-                    y = np.array(all_Qs)
-                    self._reset_dict()
-                    # clf = linear_model.LinearRegression(n_jobs = -1, normalize=False)
-                    # print("training...", X.shape, y.shape, len(self._q_values))
-                    # clf.fit(X, y)
-                    # self.w = clf.coef_
-                    # self.b = clf.intercept_
-                    #
-                    # mse = metrics.mean_squared_error(y, clf.predict(X))
-                    # r2 = metrics.explained_variance_score(y, clf.predict(X))
-                    # print(mse,r2)
-                    #if(self.model is None):
-                    self.model = build_model(X.shape[1])
-                    for i in range(200):
-                        self.model.fit(X,y, epochs = 1, verbose = True)
-                        mse = metrics.mean_squared_error(y, self.model.predict(X, verbose = False))
-                        r2 = metrics.explained_variance_score(y, self.model.predict(X,verbose = False))
-
-                        print(i, mse, r2)
-                        if (r2 > 0.85):
-                            break
 
 
 
@@ -238,4 +193,38 @@ class LSPILearner(rl_agent.AbstractAgent):
     @property
     def loss(self):
         return self._last_loss_value
+
+    def train_supervised(self):
+
+        print("About to start training")
+        all_features = []
+        all_Qs = []
+        for key, q_value in self._q_values.items():
+            if (q_value != 0):
+                state_features, action = list(
+                    key[0]), key[1]
+
+                action_features = list(
+                     np.zeros(shape=self._num_actions))
+                action_features[action[0]] = 1
+                total_features = state_features + action_features
+                all_Qs.append(q_value)
+                all_features.append(total_features)
+
+            # print(len(state_features), len(action_features), len(total_features))
+        X = np.array(all_features)
+        y = np.array(all_Qs)
+
+
+        self.model = build_model(X.shape[1])
+
+        callback = keras.callbacks.EarlyStopping(monitor='loss',
+                                                    patience=10)
+        self.model.fit(X, y, epochs=10000, verbose=False, callbacks = [callback])
+        mse = metrics.mean_squared_error(y, self.model.predict(X,
+                                                               verbose=False))
+        r2 = metrics.explained_variance_score(y, self.model.predict(X,
+                                                                    verbose=False))
+
+        print(mse, r2)
 

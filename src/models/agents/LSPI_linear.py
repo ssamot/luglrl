@@ -186,12 +186,11 @@ class LSPILearner(rl_agent.AbstractAgent):
                     all_Qs = []
                     for key, q_value in self._q_values.items():
                         if (q_value != 0):
-                            state_features, action_features = list(
+                            state_features, action = list(
                                 key[0]), list(key[1])
                             action_features = list(
                                 np.zeros(shape=self._num_actions))
-                            if (action is not None):
-                                action_features[action] = 1
+                            action_features = action_features[action[0]]
                             total_features = state_features + action_features
                             all_Qs.append(q_value)
                             all_features.append(total_features)
@@ -202,20 +201,20 @@ class LSPILearner(rl_agent.AbstractAgent):
 
 
                     ## sample 10 features
-                    batch_size = 200
-                    sample = np.random.choice(len(all_features), batch_size)
-                    diff_boards = X[sample]
-
-                    features = []
-
-                    for feature in diff_boards:
-                        ds = np.linalg.norm(X - feature, axis=-1)[:, np.newaxis]
-                        features.append(ds)
-                        #ds = ds
-
-                    distance_features = np.concatenate(features, axis = -1)
-                    X = np.concatenate([X,distance_features], axis = -1)
-                    print(distance_features.shape, X.shape)
+                    # batch_size = 200
+                    # sample = np.random.choice(len(all_features), batch_size)
+                    # diff_boards = X[sample]
+                    #
+                    # features = []
+                    #
+                    # for feature in diff_boards:
+                    #     ds = np.linalg.norm(X - feature, axis=-1)[:, np.newaxis]
+                    #     features.append(ds)
+                    #     #ds = ds
+                    #
+                    # distance_features = np.concatenate(features, axis = -1)
+                    # X = np.concatenate([X,distance_features], axis = -1)
+                    # print(distance_features.shape, X.shape)
                     #exit()
 
                     self._reset_dict()

@@ -9,30 +9,12 @@ from tqdm import tqdm
 from open_spiel.python.algorithms import random_agent
 import click
 from tqdm import trange
+from utils import evaluate
 
 
 
 
-def eval_against_random_bots(env, trained_agents, random_agents, num_episodes):
-    """Evaluates `trained_agents` against `random_agents` for `num_episodes`."""
-    #wins = np.zeros(2)
-    wins = [[],[]]
-    for player_pos in range(2):
-        if player_pos == 0:
-            cur_agents = [trained_agents[0], random_agents[1]]
-        else:
-            cur_agents = [random_agents[0], trained_agents[1]]
-        for _ in range(num_episodes):
-            time_step = env.reset()
-            while not time_step.last():
-                player_id = time_step.observations["current_player"]
-                agent_output = cur_agents[player_id].step(time_step,
-                                                          is_evaluation=True)
-                time_step = env.step([agent_output.action])
 
-            wins[player_pos].append(time_step.rewards[player_pos])
-
-    return wins
 
 
 @click.command()
@@ -82,8 +64,8 @@ def main(game_name, n_games):
             while(agent_name_1==agent_name_2):
                 agent_name_2, agent_2 = random.choice(list(agents.items()))
 
-            win_rates_vs_random = eval_against_random_bots(env, agent_1, agent_2,
-                                                         10)
+            win_rates_vs_random = evaluate(env, agent_1, agent_2,
+                                           10)
 
             for pos in [0, 1]:
                 for win in range(len(win_rates_vs_random[pos])):

@@ -12,7 +12,7 @@ PYTHON_INTERPRETER = python3
 
 TABULAR_Q_AGENT = open_spiel.python.algorithms.tabular_qlearner.QLearner
 LSPI = agents.LSPI.LSPILearner
-LSPILinear = agents.LSPI_linear.LSPILearner
+LSPILinear = agents.LSPI_sk.LSPILearner
 DQN = jax.dqn
 
 ifeq (,$(shell which conda))
@@ -32,28 +32,28 @@ requirements: test_environment
 
 ## Make Dataset
 Q_TTT:
-	$(PYTHON_INTERPRETER) src/models/train_agents.py tic_tac_toe ${TABULAR_Q_AGENT}  200001
+	$(PYTHON_INTERPRETER) src/models/train_agents.py tic_tac_toe ${TABULAR_Q_AGENT}  5000 200001
 
 LSPI_TTT:
-	$(PYTHON_INTERPRETER) src/models/train_agents.py tic_tac_toe ${LSPI}  200001
+	$(PYTHON_INTERPRETER) src/models/train_agents.py tic_tac_toe ${LSPI}  5000 200001
 
 LSPI_C4:
-	$(PYTHON_INTERPRETER) src/models/train_agents.py connect_four ${LSPI}  200001
+	$(PYTHON_INTERPRETER) src/models/train_agents.py connect_four ${LSPI}  5000 200001
 
 LSPILinear_C4:
-	$(PYTHON_INTERPRETER) src/models/train_agents.py connect_four ${LSPILinear}  200001
+	$(PYTHON_INTERPRETER) src/models/train_agents.py connect_four ${LSPILinear}  5000 200001
 
 
 LSPI_CHESS:
-	$(PYTHON_INTERPRETER) src/models/train_agents.py chess ${LSPI}  200001
+	$(PYTHON_INTERPRETER) src/models/train_agents.py chess ${LSPI}  5000 200001
 
 
 DQN_TTT:
-	$(PYTHON_INTERPRETER) src/models/train_agents.py tic_tac_toe ${DQN}  200001
+	$(PYTHON_INTERPRETER) src/models/train_agents.py tic_tac_toe ${DQN}  5000 200001
 
 
 Q_C4:
-	$(PYTHON_INTERPRETER) src/models/train_agents.py connect_four ${TABULAR_Q_AGENT}  200001
+	$(PYTHON_INTERPRETER) src/models/train_agents.py connect_four ${TABULAR_Q_AGENT}  5000 200001
 
 TOURNAMENT_C4:
 	$(PYTHON_INTERPRETER) src/models/run_tournament.py connect_four 1000
