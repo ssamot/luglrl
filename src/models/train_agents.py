@@ -74,13 +74,16 @@ def main(game_name, agent_class, comparison_point,  training_episodes):
                     #play games
                     def get_diff():
                         scores_past = evaluate(env, deepcopy(previous_agents),
-                                                   deepcopy(agent_before_previous_agent), 1000,
-                                                   0.1)
+                                                   deepcopy(agent_before_previous_agent),
+                                               1000, 0.1)
 
                         scores_past = np.array(scores_past)
 
                         scores_before_previous = evaluate(env, deepcopy(agents),
-                                          deepcopy(agent_before_previous_agent), 1000, 0.1)
+                                          deepcopy(agent_before_previous_agent),
+                                                          1000, 0.1)
+
+                        
 
                         scores_before_previous = np.array(scores_before_previous)
 
@@ -115,6 +118,8 @@ def main(game_name, agent_class, comparison_point,  training_episodes):
                                     agent.model = models[m]
 
                         except AttributeError:
+                            import traceback
+                            print(traceback.format_exc())
                             print("Agents do not support supervised training")
                     else:
                         print(bcolors.FAIL + f"No improvement {diff}" + bcolors.ENDC)

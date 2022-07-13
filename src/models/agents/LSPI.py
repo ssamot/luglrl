@@ -69,21 +69,22 @@ class LSPILearner(rl_agent.AbstractAgent):
         self.episode_length = 0
         self.model = None
 
-    def __getstate__(self):
-        state = dict(self.__dict__)
-        del state['_q_values']
-        return state
-
-    def __setstate__(self, state):
-        self.__dict__ = state
-        self._reset_dict()
+    # def __getstate__(self):
+    #     state = dict(self.__dict__)
+    #     del state['_q_values']
+    #     return state
+    #
+    # def __setstate__(self, state):
+    #     self.__dict__ = state
+    #     self._reset_dict()
 
     def _reset_dict(self):
         self._q_values = keydefaultdict(self._default_value)
 
     def _default_value(self, key):
         if(self.model is None):
-            return 0
+
+            return 0.0
         else:
             state_features, action = list(key[0]), list(key[1])[0]
             action_features = list(np.zeros(shape=self._num_actions))
@@ -96,6 +97,10 @@ class LSPILearner(rl_agent.AbstractAgent):
 
             #print(value)
             return value[0][0]
+
+    def get_state_action(self, info_state, action):
+        return (tuple(info_state), tuple([action]))
+
 
     def _epsilon_greedy(self, info_state, legal_actions, epsilon):
         """Returns a valid epsilon-greedy action and valid action probs.
@@ -115,11 +120,11 @@ class LSPILearner(rl_agent.AbstractAgent):
         probs = np.zeros(self._num_actions)
 
 
-        greedy_q = max([self._q_values[tuple(info_state),tuple([a])] for a in legal_actions])
+        greedy_q = max([self._q_values[self.get_state_action(info_state,a)] for a in legal_actions])
 
         greedy_actions = [
             a for a in legal_actions if
-            self._q_values[tuple(info_state),tuple([a])] == greedy_q
+            self._q_values[self.get_state_action(info_state,a)] == greedy_q
         ]
         probs[legal_actions] = epsilon / len(legal_actions)
         probs[greedy_actions] += (1 - epsilon) / len(greedy_actions)
@@ -151,19 +156,20 @@ class LSPILearner(rl_agent.AbstractAgent):
             epsilon = 0.0 if is_evaluation else self._epsilon
             action, probs = self._epsilon_greedy(
                 info_state, legal_actions, epsilon=epsilon)
-
+        #print(time_step.rewards, time_step.last())
         # Learn step: don't learn during evaluation or at first agent steps.
         if self._prev_info_state and not is_evaluation:
+            #print("training")
             target = time_step.rewards[self._player_id]
             if not time_step.last():  # Q values are zero for terminal.
                 target += self._discount_factor * max(
-                    [self._q_values[tuple(info_state),tuple([a])] for a in legal_actions])
-
-            prev_q_value = self._q_values[tuple(self._prev_info_state),
-                tuple([self._prev_action])]
+                    [self._q_values[self.get_state_action(info_state,a)] for a in legal_actions])
+            #print(target)
+            prev = self.get_state_action(self._prev_info_state,self._prev_action)
+            prev_q_value = self._q_values[prev]
             self._last_loss_value = target - prev_q_value
-            self._q_values[tuple(self._prev_info_state),
-                tuple([self._prev_action])] += (
+            #print(target, prev_q_value)
+            self._q_values[prev] += (
                     self._step_size * self._last_loss_value)
 
 
@@ -176,13 +182,10 @@ class LSPILearner(rl_agent.AbstractAgent):
                 self._n_games +=1
                 #print(self.episode_length)
                 self.episode_length = 0
-
-
-
-
-
-
+                #print(time_step.rewards, "rewards")
+                #exit()
                 return
+
 
         # Don't mess up with the state during evaluation.
         if not is_evaluation:

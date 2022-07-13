@@ -12,7 +12,7 @@ PYTHON_INTERPRETER = python3
 
 TABULAR_Q_AGENT = open_spiel.python.algorithms.tabular_qlearner.QLearner
 LSPI = agents.LSPI.LSPILearner
-LSPILinear = agents.LSPI_sk.LSPILearner
+LSPILinear = agents.LSPI_bagging.LSPILearner
 DQN = jax.dqn
 
 ifeq (,$(shell which conda))
@@ -36,6 +36,10 @@ Q_TTT:
 
 LSPI_TTT:
 	$(PYTHON_INTERPRETER) src/models/train_agents.py tic_tac_toe ${LSPI}  5000 200001
+
+LSPILinear_TTT:
+	$(PYTHON_INTERPRETER) src/models/train_agents.py tic_tac_toe ${LSPILinear}  5000 200001
+
 
 LSPI_C4:
 	$(PYTHON_INTERPRETER) src/models/train_agents.py connect_four ${LSPI}  5000 200001

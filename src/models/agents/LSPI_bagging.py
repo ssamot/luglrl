@@ -29,21 +29,6 @@ from agents.nn import build_model
 import keras
 
 
-
-
-
-def child_U(all_childs):
-    C = 1
-    parent_visits = np.sum(all_childs)
-    all_U = [C* np.sqrt(np.log(parent_visits)/child_visits)
-             for child_visits in all_childs]
-    return all_U
-
-
-def Q_MC(r, old_mean, visits):
-    new_mean = old_mean + ((r-old_mean)/visits)
-    return new_mean
-
 class keydefaultdict(collections.defaultdict):
     def __missing__(self, key):
         if self.default_factory is None:
@@ -51,10 +36,6 @@ class keydefaultdict(collections.defaultdict):
         else:
             ret = self[key] = self.default_factory(key)
             return ret
-
-def one():
-    return 1
-
 
 
 class LSPILearner(rl_agent.AbstractAgent):
@@ -66,6 +47,8 @@ class LSPILearner(rl_agent.AbstractAgent):
     def __init__(self,
                  player_id,
                  num_actions,
+                 step_size=0.1,
+                 epsilon_schedule=rl_tools.ConstantSchedule(0.2),
                  discount_factor=1.0,
                  centralized=False,
 
@@ -73,6 +56,9 @@ class LSPILearner(rl_agent.AbstractAgent):
         """Initialize the Q-Learning agent."""
         self._player_id = player_id
         self._num_actions = num_actions
+        self._step_size = step_size
+        self._epsilon_schedule = epsilon_schedule
+        self._epsilon = epsilon_schedule.value
         self._discount_factor = discount_factor
         self._centralized = centralized
 
@@ -82,7 +68,6 @@ class LSPILearner(rl_agent.AbstractAgent):
         self._n_games = 0
         self.episode_length = 0
         self.model = None
-        self.states_visited = []
 
     def __getstate__(self):
         state = dict(self.__dict__)
@@ -95,7 +80,6 @@ class LSPILearner(rl_agent.AbstractAgent):
 
     def _reset_dict(self):
         self._q_values = keydefaultdict(self._default_value)
-        self._visits = collections.defaultdict(one)
 
     def _default_value(self, key):
         if(self.model is None):
@@ -113,32 +97,33 @@ class LSPILearner(rl_agent.AbstractAgent):
             #print(value)
             return value[0][0]
 
-    def get_state(self, info_state, action):
-        return tuple(info_state), tuple([action])
+    def _epsilon_greedy(self, info_state, legal_actions, epsilon):
+        """Returns a valid epsilon-greedy action and valid action probs.
 
-    def _UCB(self, info_state, legal_actions, is_evaluation):
+        If the agent has not been to `info_state`, a valid random action is chosen.
 
+        Args:
+          info_state: hashable representation of the information state.
+          legal_actions: list of actions at `info_state`.
+          epsilon: float, prob of taking an exploratory action.
+
+        Returns:
+          A valid epsilon-greedy action and valid action probabilities.
+        """
+
+        # q_values[info_state][a]  transformed to q_values[tuple(info_state) + tuple(a)]
         probs = np.zeros(self._num_actions)
-        child_visits = np.array([self._visits[self.get_state(info_state, action)] for
-                  action in legal_actions])
-        #never_visited = (child_visits == 0)
-        # if(np.sum(never_visited) > 0):
-        #     # [f(x) if condition else g(x) for x in sequence]
-        #     all_Qs = [np.random.random() if nv else 0 for nv in never_visited]
-        #
-        # else:
-        all_Qs = [self._q_values[self.get_state(info_state, action)] for action
-                      in legal_actions]
-
-        if(is_evaluation):
-            all_Us = child_U(child_visits)
-            best_legal_action = np.argmax(np.array(all_Qs) + np.array(all_Us))
-        else:
-            best_legal_action = np.argmax(np.array(all_Qs))
-        action = legal_actions[best_legal_action]
-        probs[action] = 1
 
 
+        greedy_q = max([self._q_values[tuple(info_state),tuple([a])] for a in legal_actions])
+
+        greedy_actions = [
+            a for a in legal_actions if
+            self._q_values[tuple(info_state),tuple([a])] == greedy_q
+        ]
+        probs[legal_actions] = epsilon / len(legal_actions)
+        probs[greedy_actions] += (1 - epsilon) / len(greedy_actions)
+        action = np.random.choice(range(self._num_actions), p=probs)
         return action, probs
 
     def step(self, time_step, is_evaluation=False):
@@ -163,23 +148,46 @@ class LSPILearner(rl_agent.AbstractAgent):
 
         # Act step: don't act at terminal states.
         if not time_step.last():
-            action, probs = self._UCB(
-                info_state, legal_actions, is_evaluation)
-            sa = self.get_state(info_state, action)
-            self.states_visited.append(sa)
-            self._visits[sa] +=1
-            self.episode_length += 1
-        else:
-            if not is_evaluation:
-                target = time_step.rewards[self._player_id]
-                self._n_games += 1
-                self.episode_length = 0
-                ## backpropagate
-                for state in self.states_visited:
+            epsilon = 0.0 if is_evaluation else self._epsilon
+            action, probs = self._epsilon_greedy(
+                info_state, legal_actions, epsilon=epsilon)
 
-                    self._q_values = Q_MC(target,self._q_values[state],self._visits[state])
+        # Learn step: don't learn during evaluation or at first agent steps.
+        if self._prev_info_state and not is_evaluation:
+            target = time_step.rewards[self._player_id]
+            if not time_step.last():  # Q values are zero for terminal.
+                target += self._discount_factor * max(
+                    [self._q_values[tuple(info_state),tuple([a])] for a in legal_actions])
+
+            prev_q_value = self._q_values[tuple(self._prev_info_state),
+                tuple([self._prev_action])]
+            self._last_loss_value = target - prev_q_value
+            self._q_values[tuple(self._prev_info_state),
+                tuple([self._prev_action])] += (
+                    self._step_size * self._last_loss_value)
+
+
+
+
+            self._epsilon = self._epsilon_schedule.step()
+            self.episode_length+=1
+            if time_step.last():  # prepare for the next episode.
+                self._prev_info_state = None
+                self._n_games +=1
+                #print(self.episode_length)
+                self.episode_length = 0
+
+
+
+
+
+
                 return
 
+        # Don't mess up with the state during evaluation.
+        if not is_evaluation:
+            self._prev_info_state = info_state
+            self._prev_action = action
         return rl_agent.StepOutput(action=action, probs=probs)
 
     @property
@@ -207,16 +215,23 @@ class LSPILearner(rl_agent.AbstractAgent):
         X = np.array(all_features)
         y = np.array(all_Qs)
 
+        import keras.backend as K
+        import tensorflow as tf
+        session_conf = tf.ConfigProto(
+            intra_op_parallelism_threads=1,
+            inter_op_parallelism_threads=1)
+        sess = tf.Session(config=session_conf)
+        K.set_session(sess)
 
         self.model = build_model(X.shape[1])
 
         callback = keras.callbacks.EarlyStopping(monitor='loss',
-                                                    patience=10)
+                                                        patience=10)
         self.model.fit(X, y, epochs=10000, verbose=False, callbacks = [callback])
         mse = metrics.mean_squared_error(y, self.model.predict(X,
-                                                               verbose=False))
+                                                                   verbose=False))
         r2 = metrics.explained_variance_score(y, self.model.predict(X,
-                                                                    verbose=False))
+                                                                        verbose=False))
 
         print(mse, r2)
 
