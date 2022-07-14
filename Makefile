@@ -12,7 +12,7 @@ PYTHON_INTERPRETER = python3
 
 TABULAR_Q_AGENT = open_spiel.python.algorithms.tabular_qlearner.QLearner
 LSPI = agents.LSPI.LSPILearner
-LSPILinear = agents.LSPI_bagging.LSPILearner
+LSPILinear = agents.LSPI_sk.LSPILearner
 DQN = jax.dqn
 
 ifeq (,$(shell which conda))

@@ -7,15 +7,10 @@ import seaborn as sns
 from pathlib import Path
 
 
-@click.command()
-@click.argument('input_filepath', type=click.Path(exists=True))
-def main(input_filepath):
+def calculate_glicko_scores(input_filepath):
     # project_dir = Path(__file__).resolve().parents[2]
     df = pd.read_csv(input_filepath, index_col=0)
 
-    path = Path(input_filepath).parents[0]
-    name = Path(input_filepath).stem
-    df_filename = f"{path}/{name}_glicko.csv"
     all_players = set(pd.concat([df["player_1"], df["player_2"]]))
 
     env = Glicko2(tau=0.5)
@@ -63,7 +58,18 @@ def main(input_filepath):
         rated = env.rate(ratings[player][0], games)
         new_ratings[player] = rated, ratings[player][1], ratings[player][2]
         print(player, rated)
-    # start the visualisation
+    return new_ratings
+    
+
+@click.command()
+@click.argument('input_filepath', type=click.Path(exists=True))
+def main(input_filepath):
+
+    new_ratings = calculate_glicko_scores(input_filepath)
+
+    path = Path(input_filepath).parents[0]
+    name = Path(input_filepath).stem
+    df_filename = f"{path}/{name}_glicko.csv"
 
     map_results = {"n_games": [],
                    "glicko2": [],

@@ -19,6 +19,8 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
+import random
+
 import numpy as np
 
 from open_spiel.python import rl_agent
@@ -27,12 +29,14 @@ from sklearn import linear_model
 from sklearn import metrics
 from agents.nn import build_model
 import keras
+import os
+from joblib import Parallel, delayed
 
 
 class keydefaultdict(collections.defaultdict):
     def __missing__(self, key):
         if self.default_factory is None:
-            raise KeyError( key )
+            raise KeyError(key)
         else:
             ret = self[key] = self.default_factory(key)
             return ret
@@ -48,7 +52,7 @@ class LSPILearner(rl_agent.AbstractAgent):
                  player_id,
                  num_actions,
                  step_size=0.1,
-                 epsilon_schedule=rl_tools.ConstantSchedule(0.2),
+                 epsilon_schedule=rl_tools.ConstantSchedule(0.0),
                  discount_factor=1.0,
                  centralized=False,
 
@@ -69,20 +73,11 @@ class LSPILearner(rl_agent.AbstractAgent):
         self.episode_length = 0
         self.model = None
 
-    def __getstate__(self):
-        state = dict(self.__dict__)
-        del state['_q_values']
-        return state
-
-    def __setstate__(self, state):
-        self.__dict__ = state
-        self._reset_dict()
-
     def _reset_dict(self):
         self._q_values = keydefaultdict(self._default_value)
 
     def _default_value(self, key):
-        if(self.model is None):
+        if (self.model is None):
             return 0
         else:
             state_features, action = list(key[0]), list(key[1])[0]
@@ -90,11 +85,12 @@ class LSPILearner(rl_agent.AbstractAgent):
             if (action is not None):
                 action_features[action] = 1
             total_features = state_features + action_features
-            phi = np.array(total_features)[np.newaxis,:]
-            value = self.model(phi)
-            #print(value)
+            phi = np.array(total_features)[np.newaxis, :]
+            model = random.choice(self.model)
+            value = model(phi)
+            # print(value)
 
-            #print(value)
+            # print(value)
             return value[0][0]
 
     def _epsilon_greedy(self, info_state, legal_actions, epsilon):
@@ -114,12 +110,12 @@ class LSPILearner(rl_agent.AbstractAgent):
         # q_values[info_state][a]  transformed to q_values[tuple(info_state) + tuple(a)]
         probs = np.zeros(self._num_actions)
 
-
-        greedy_q = max([self._q_values[tuple(info_state),tuple([a])] for a in legal_actions])
+        greedy_q = max([self._q_values[tuple(info_state), tuple([a])] for a in
+                        legal_actions])
 
         greedy_actions = [
             a for a in legal_actions if
-            self._q_values[tuple(info_state),tuple([a])] == greedy_q
+            self._q_values[tuple(info_state), tuple([a])] == greedy_q
         ]
         probs[legal_actions] = epsilon / len(legal_actions)
         probs[greedy_actions] += (1 - epsilon) / len(greedy_actions)
@@ -157,30 +153,23 @@ class LSPILearner(rl_agent.AbstractAgent):
             target = time_step.rewards[self._player_id]
             if not time_step.last():  # Q values are zero for terminal.
                 target += self._discount_factor * max(
-                    [self._q_values[tuple(info_state),tuple([a])] for a in legal_actions])
+                    [self._q_values[tuple(info_state), tuple([a])] for a in
+                     legal_actions])
 
             prev_q_value = self._q_values[tuple(self._prev_info_state),
-                tuple([self._prev_action])]
+                                          tuple([self._prev_action])]
             self._last_loss_value = target - prev_q_value
             self._q_values[tuple(self._prev_info_state),
-                tuple([self._prev_action])] += (
+                           tuple([self._prev_action])] += (
                     self._step_size * self._last_loss_value)
 
-
-
-
             self._epsilon = self._epsilon_schedule.step()
-            self.episode_length+=1
+            self.episode_length += 1
             if time_step.last():  # prepare for the next episode.
                 self._prev_info_state = None
-                self._n_games +=1
-                #print(self.episode_length)
+                self._n_games += 1
+                # print(self.episode_length)
                 self.episode_length = 0
-
-
-
-
-
 
                 return
 
@@ -205,7 +194,7 @@ class LSPILearner(rl_agent.AbstractAgent):
                     key[0]), key[1]
 
                 action_features = list(
-                     np.zeros(shape=self._num_actions))
+                    np.zeros(shape=self._num_actions))
                 action_features[action[0]] = 1
                 total_features = state_features + action_features
                 all_Qs.append(q_value)
@@ -215,23 +204,41 @@ class LSPILearner(rl_agent.AbstractAgent):
         X = np.array(all_features)
         y = np.array(all_Qs)
 
-        import keras.backend as K
-        import tensorflow as tf
-        session_conf = tf.ConfigProto(
-            intra_op_parallelism_threads=1,
-            inter_op_parallelism_threads=1)
-        sess = tf.Session(config=session_conf)
-        K.set_session(sess)
+        # reduce number of threads
+        os.environ['TF_NUM_INTEROP_THREADS'] = '1'
+        os.environ['TF_NUM_INTRAOP_THREADS'] = '1'
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+        #import keras.backend as K
+        keras.backend.clear_session()
 
-        self.model = build_model(X.shape[1])
+        def fit(model, X, y, callbacks):
+            model.fit(X,
+                      y,
+                      epochs=10000,
+                      verbose=False,
+                      callbacks=callbacks)
+            return model
 
-        callback = keras.callbacks.EarlyStopping(monitor='loss',
-                                                        patience=10)
-        self.model.fit(X, y, epochs=10000, verbose=False, callbacks = [callback])
-        mse = metrics.mean_squared_error(y, self.model.predict(X,
+        models_and_features = []
+        n_ensemble = 20
+        for _ in range(n_ensemble):
+            model = build_model(X.shape[1])
+            bootstrap = np.random.choice(len(X), replace=True, size=len(X))
+            callback = keras.callbacks.EarlyStopping(monitor='loss',
+                                                     patience=10)
+
+            models_and_features.append([model, bootstrap, callback])
+
+        models = Parallel(n_jobs=10)(delayed(fit)(model, X[bootstrap],
+                                                  y[bootstrap],
+                                                  callbacks=[callback])
+                                     for model, bootstrap, callback in
+                                     models_and_features)
+
+        for model in models:
+            mse = metrics.mean_squared_error(y, model.predict(X,
+                                                              verbose=False))
+            r2 = metrics.explained_variance_score(y, model.predict(X,
                                                                    verbose=False))
-        r2 = metrics.explained_variance_score(y, self.model.predict(X,
-                                                                        verbose=False))
-
-        print(mse, r2)
-
+            #print(mse, r2)
+        self.model = models

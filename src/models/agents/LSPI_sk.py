@@ -40,6 +40,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from joblib import dump
 from sklearn.preprocessing import PolynomialFeatures
+from lightgbm import LGBMRegressor
 
 
 class keydefaultdict(collections.defaultdict):
@@ -82,14 +83,7 @@ class LSPILearner(rl_agent.AbstractAgent):
         self.episode_length = 0
         self.model = None
 
-    def __getstate__(self):
-        state = dict(self.__dict__)
-        del state['_q_values']
-        return state
 
-    def __setstate__(self, state):
-        self.__dict__ = state
-        self._reset_dict()
 
     def _reset_dict(self):
         self._q_values = keydefaultdict(self._default_value)
@@ -226,27 +220,7 @@ class LSPILearner(rl_agent.AbstractAgent):
         X = np.array(all_features)
         y = np.array(all_Qs)
 
-        # tweedie_pipeline = [("features", PolynomialFeatures()),
-        #                     ('scaler', StandardScaler()),
-        #                     ('clf', TweedieRegressor())]
-        #
-        # clf_tweedie = GridSearchCV(Pipeline(tweedie_pipeline), param_grid={
-        #     "clf__power": [0, 2, 3] + list(np.arange(1, 2, 0.1)),
-        #     "clf__alpha": [0.5, 0.1, 0.01, 0.001, 1, 2, 10, 20],
-        #     "features__degree": [1, 2],
-        #     "clf__max_iter": [10000]
-        # },
-        #                            n_jobs=2, cv=10,
-        #                            scoring="neg_mean_squared_error", verbose=100)
-        # clf_tweedie.fit(X,y)
-
-        # clf = GridSearchCV(DecisionTreeRegressor(),
-        #                    param_grid={
-        #                        "min_weight_fraction_leaf": [1 / (2 ** 3.5)]},
-        #                    n_jobs=-1, cv=10, scoring="neg_mean_squared_error")
-
-
-        clf = LassoLarsCV()
+        clf = LGBMRegressor()
 
         clf.fit(X,y)
         self.model = clf

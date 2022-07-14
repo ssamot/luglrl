@@ -83,7 +83,7 @@ def main(game_name, agent_class, comparison_point,  training_episodes):
                                           deepcopy(agent_before_previous_agent),
                                                           1000, 0.1)
 
-                        
+
 
                         scores_before_previous = np.array(scores_before_previous)
 
