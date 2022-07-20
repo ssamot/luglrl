@@ -25,8 +25,7 @@ from open_spiel.python import rl_agent
 from open_spiel.python import rl_tools
 from sklearn import linear_model
 from sklearn import metrics
-from agents.nn import build_model
-import keras
+from lightgbm.sklearn import LGBMRegressor
 
 
 
@@ -57,7 +56,7 @@ def one():
 
 
 
-class LSPILearner(rl_agent.AbstractAgent):
+class LSPI_UCBLearner(rl_agent.AbstractAgent):
     """Tabular Q-Learning agent.
 
     See open_spiel/python/examples/tic_tac_toe_qlearner.py for an usage example.
@@ -83,6 +82,7 @@ class LSPILearner(rl_agent.AbstractAgent):
         self.episode_length = 0
         self.model = None
         self.states_visited = []
+        self.episode_length_mean = 0
 
     def __getstate__(self):
         state = dict(self.__dict__)
@@ -99,7 +99,7 @@ class LSPILearner(rl_agent.AbstractAgent):
 
     def _default_value(self, key):
         if(self.model is None):
-            return 0
+            return np.random.random() * 0.001
         else:
             state_features, action = list(key[0]), list(key[1])[0]
             action_features = list(np.zeros(shape=self._num_actions))
@@ -131,15 +131,17 @@ class LSPILearner(rl_agent.AbstractAgent):
                       in legal_actions]
 
         if(is_evaluation):
+            best_legal_action = np.argmax(np.array(all_Qs))
+        else:
             all_Us = child_U(child_visits)
             best_legal_action = np.argmax(np.array(all_Qs) + np.array(all_Us))
-        else:
-            best_legal_action = np.argmax(np.array(all_Qs))
+
         action = legal_actions[best_legal_action]
         probs[action] = 1
 
 
         return action, probs
+
 
     def step(self, time_step, is_evaluation=False):
         """Returns the action to be taken and updates the Q-values if needed.
@@ -165,7 +167,9 @@ class LSPILearner(rl_agent.AbstractAgent):
         if not time_step.last():
             action, probs = self._UCB(
                 info_state, legal_actions, is_evaluation)
+            #print(action)
             sa = self.get_state(info_state, action)
+
             self.states_visited.append(sa)
             self._visits[sa] +=1
             self.episode_length += 1
@@ -173,11 +177,16 @@ class LSPILearner(rl_agent.AbstractAgent):
             if not is_evaluation:
                 target = time_step.rewards[self._player_id]
                 self._n_games += 1
+                #print(self.episode_length_mean)
+                self.episode_length_mean = Q_MC(self.episode_length, self.episode_length_mean, 1000)
                 self.episode_length = 0
+
                 ## backpropagate
                 for state in self.states_visited:
-
-                    self._q_values = Q_MC(target,self._q_values[state],self._visits[state])
+                    p = self._visits[state]
+                    q = self._q_values[state]
+                    self._q_values[state] = Q_MC(target,q,p)
+                self.states_visited = []
                 return
 
         return rl_agent.StepOutput(action=action, probs=probs)
@@ -192,31 +201,42 @@ class LSPILearner(rl_agent.AbstractAgent):
         all_features = []
         all_Qs = []
         for key, q_value in self._q_values.items():
-            if (q_value != 0):
+
                 state_features, action = list(
                     key[0]), key[1]
 
-                action_features = list(
-                     np.zeros(shape=self._num_actions))
-                action_features[action[0]] = 1
-                total_features = state_features + action_features
+                # action_features = list(
+                #     np.zeros(shape=self._num_actions))
+                # action_features[action[0]] = 1
+                total_features = state_features + list(action)
                 all_Qs.append(q_value)
                 all_features.append(total_features)
 
             # print(len(state_features), len(action_features), len(total_features))
         X = np.array(all_features)
         y = np.array(all_Qs)
+        from sklearn.kernel_ridge import KernelRidge
+        print(X.shape, y.shape)
+        clf = LGBMRegressor()
+        # clf = ExtraTreesRegressor(max_depth=10)
 
-
-        self.model = build_model(X.shape[1])
-
-        callback = keras.callbacks.EarlyStopping(monitor='loss',
-                                                    patience=10)
-        self.model.fit(X, y, epochs=10000, verbose=False, callbacks = [callback])
-        mse = metrics.mean_squared_error(y, self.model.predict(X,
-                                                               verbose=False))
-        r2 = metrics.explained_variance_score(y, self.model.predict(X,
-                                                                    verbose=False))
+        # encoder = category_encoders.TargetEncoder(cols = range(X.shape[1]))
+        # encoder.fit(X,y)
+        # X_enc = encoder.transform(X)
+        # #print(X_enc)
+        # #exit()
+        #
+        # pipeline = [("features", StandardScaler()),
+        #                     ('clf', SGDRegressor())]
+        #
+        # clf = GridSearchCV(DecisionTreeRegressor(),
+        #                    param_grid={
+        #                        "min_weight_fraction_leaf": [1 / (2 ** 3.5)]},
+        #                    n_jobs=-1, cv=10, scoring="neg_mean_squared_error")
+        # print(X.shape, y.shape)
+        clf.fit(X, y, categorical_feature=range(X.shape[1]))
+        self.model = clf
+        mse = metrics.mean_squared_error(y, self.model.predict(X))
+        r2 = metrics.explained_variance_score(y, self.model.predict(X))
 
         print(mse, r2)
-

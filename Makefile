@@ -10,10 +10,18 @@ PROFILE = default
 PROJECT_NAME = fastrl
 PYTHON_INTERPRETER = python3
 
-TABULAR_Q_AGENT = open_spiel.python.algorithms.tabular_qlearner.QLearner
-LSPI = agents.LSPI.LSPILearner
-LSPILinear = agents.LSPI_sk.LSPILearner
-DQN = jax.dqn
+TABULAR_Q_AGENT = agents.tabularQ.QLearning
+LUGL_nn = agents.lugl.LUGLNeuralNetwork
+LUGL_linear = agents.lugl.LUGLLinear
+LUGL_lightGBM = agents.lugl.LUGLLightGBM
+DQN = agents.dqn.DQN
+
+
+TTT = tic_tac_toe
+CHESS = chess
+GO = go
+CONNECT_FOUR = connect_four
+
 
 ifeq (,$(shell which conda))
 HAS_CONDA=False
@@ -21,18 +29,23 @@ else
 HAS_CONDA=True
 endif
 
+export PYTHONPATH=./src
+
 #################################################################################
 # COMMANDS                                                                      #
 #################################################################################
 
 ## Install Python Dependencies
+
+
+
 requirements: test_environment
 	$(PYTHON_INTERPRETER) -m pip install -U pip setuptools wheel
 	$(PYTHON_INTERPRETER) -m pip install -r requirements.txt
 
 ## Make Dataset
 Q_TTT:
-	$(PYTHON_INTERPRETER) src/models/train_agents.py tic_tac_toe ${TABULAR_Q_AGENT}  5000 200001
+	$(PYTHON_INTERPRETER) src/models/train_agents.py {GAME_TYPE} ${AGENT_TYPE}  5000 200001
 
 LSPI_TTT:
 	$(PYTHON_INTERPRETER) src/models/train_agents.py tic_tac_toe ${LSPI}  5000 200001

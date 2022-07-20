@@ -23,10 +23,14 @@ import numpy as np
 
 from open_spiel.python import rl_agent
 from open_spiel.python import rl_tools
-from sklearn import linear_model
 from sklearn import metrics
-from agents.nn import build_model
-import keras
+from category_encoders import TargetEncoder
+
+
+
+from sklearn import linear_model
+
+
 
 
 class keydefaultdict(collections.defaultdict):
@@ -38,7 +42,7 @@ class keydefaultdict(collections.defaultdict):
             return ret
 
 
-class LSPILearner(rl_agent.AbstractAgent):
+class LUGLNeuralNetwork(rl_agent.AbstractAgent):
     """Tabular Q-Learning agent.
 
     See open_spiel/python/examples/tic_tac_toe_qlearner.py for an usage example.
@@ -46,9 +50,10 @@ class LSPILearner(rl_agent.AbstractAgent):
 
     def __init__(self,
                  player_id,
+                 state_representation_size,  ## ignored
                  num_actions,
                  step_size=0.1,
-                 epsilon_schedule=rl_tools.ConstantSchedule(0.2),
+                 epsilon_schedule=rl_tools.ConstantSchedule(0.1),
                  discount_factor=1.0,
                  centralized=False,
 
@@ -69,14 +74,14 @@ class LSPILearner(rl_agent.AbstractAgent):
         self.episode_length = 0
         self.model = None
 
-    # def __getstate__(self):
-    #     state = dict(self.__dict__)
-    #     del state['_q_values']
-    #     return state
-    #
-    # def __setstate__(self, state):
-    #     self.__dict__ = state
-    #     self._reset_dict()
+    def __getstate__(self):
+        state = dict(self.__dict__)
+        del state['_q_values']
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__ = state
+        self._reset_dict()
 
     def _reset_dict(self):
         self._q_values = keydefaultdict(self._default_value)
@@ -93,9 +98,7 @@ class LSPILearner(rl_agent.AbstractAgent):
             total_features = state_features + action_features
             phi = np.array(total_features)[np.newaxis,:]
             value = self.model(phi)
-            #print(value)
 
-            #print(value)
             return value[0][0]
 
     def get_state_action(self, info_state, action):
@@ -197,6 +200,29 @@ class LSPILearner(rl_agent.AbstractAgent):
     def loss(self):
         return self._last_loss_value
 
+
+    def build_model(self, y_axis):
+
+        # imports here, because we can't be loading tensorflow in subclasses
+        from keras.models import Sequential
+        from keras.layers import Dense
+        import tensorflow as tf
+        import keras
+        n_threads = 6
+        tf.config.threading.set_inter_op_parallelism_threads(n_threads)
+        tf.config.threading.set_intra_op_parallelism_threads(n_threads)
+
+        input_shape = (y_axis,)
+        model = Sequential()
+        model.add(Dense(y_axis, input_shape=input_shape, activation='relu'))
+        model.add(Dense(1, activation='linear'))
+
+        model.compile(loss=keras.losses.mean_squared_error,
+                      optimizer=keras.optimizers.Adam(), jit_compile=False,
+
+                      )
+        return model
+
     def train_supervised(self):
 
         print("About to start training")
@@ -217,10 +243,15 @@ class LSPILearner(rl_agent.AbstractAgent):
             # print(len(state_features), len(action_features), len(total_features))
         X = np.array(all_features)
         y = np.array(all_Qs)
+        import os
+        N = 4
+        os.environ["OMP_NUM_THREADS"] = f"{N}"
+        os.environ['TF_NUM_INTEROP_THREADS'] = f"{N}"
+        os.environ['TF_NUM_INTRAOP_THREADS'] = f"{N}"
 
-
-        self.model = build_model(X.shape[1])
-
+        self.model = self.build_model(X.shape[1])
+        print(X.shape, y.shape)
+        import keras
         callback = keras.callbacks.EarlyStopping(monitor='loss',
                                                     patience=10)
         self.model.fit(X, y, epochs=10000, verbose=False, callbacks = [callback])
@@ -230,4 +261,96 @@ class LSPILearner(rl_agent.AbstractAgent):
                                                                     verbose=False))
 
         print(mse, r2)
+
+
+
+class LUGLLightGBM(LUGLNeuralNetwork):
+
+    def _default_value(self, key):
+        if (self.model is None):
+
+            return 0.0
+        else:
+            state_features, action = list(key[0]), list(key[1])
+            total_features = state_features + action
+            phi = np.array(total_features)[np.newaxis, :]
+            value = self.model.predict(phi)
+
+            return value[0]
+
+    def train_supervised(self):
+
+        print("About to start training")
+        all_features = []
+        all_Qs = []
+        for key, q_value in self._q_values.items():
+            state_features, action = list(
+                key[0]), key[1]
+
+            total_features = state_features + list(action)
+            all_Qs.append(q_value)
+            all_features.append(total_features)
+
+        X = np.array(all_features)
+        y = np.array(all_Qs)
+
+        print(X.shape, y.shape)
+        from lightgbm.sklearn import LGBMRegressor
+        clf = LGBMRegressor(n_jobs=6)
+        clf.fit(X,y, categorical_feature = range(X.shape[1]))
+        self.model = clf
+        mse = metrics.mean_squared_error(y, self.model.predict(X))
+        r2 = metrics.explained_variance_score(y, self.model.predict(X))
+
+        print(mse, r2)
+
+
+class LUGLLinear(LUGLNeuralNetwork):
+
+
+
+    def _default_value(self, key):
+        if(self.model is None):
+
+            return 0.0
+        else:
+            state_features, action = list(key[0]), list(key[1])
+            total_features = state_features + action
+            phi = np.array(total_features)[np.newaxis,:]
+            X_enc = self.encoder.transform(phi)
+            value = self.model.predict(X_enc)
+
+            return value[0]
+
+    def train_supervised(self):
+
+        print("About to start training")
+        all_features = []
+        all_Qs = []
+        for key, q_value in self._q_values.items():
+            state_features, action = list(
+                key[0]), key[1]
+
+            total_features = state_features + list(action)
+            all_Qs.append(q_value)
+            all_features.append(total_features)
+
+        X = np.array(all_features)
+        y = np.array(all_Qs)
+        #print(X.shape, y.shape)
+        #exit()
+        self.encoder = TargetEncoder(cols=[X.shape[1]-1])
+        self.encoder.fit(X, y)
+        X_enc = self.encoder.transform(X)
+        print(X_enc)
+
+        print(X.shape, y.shape)
+        clf = linear_model.LinearRegression()
+        clf.fit(X_enc,y)
+        self.model = clf
+        mse = metrics.mean_squared_error(y, self.model.predict(X_enc))
+        r2 = metrics.explained_variance_score(y, self.model.predict(X_enc))
+
+        print(mse, r2)
+
 

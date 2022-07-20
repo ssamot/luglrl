@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 
 import click
 import numpy as np
@@ -25,6 +26,8 @@ from copy import deepcopy
 from utils import evaluate, bcolors
 from open_spiel.python.algorithms import random_agent
 from scipy.stats import ttest_1samp
+from visualization.calculate_glicko2_scores import calculate_glicko_scores
+from run_tournament import run_tournament
 
 @click.command()
 @click.argument('game_name', type = click.STRING)
@@ -38,12 +41,13 @@ def main(game_name, agent_class, comparison_point,  training_episodes):
 
     env = rl_environment.Environment(game)
     num_actions = env.action_spec()["num_actions"]
+    state_size = env.observation_spec()["info_state"][0]
 
     module_name, class_name = agent_class.rsplit(".", 1)
     AgentClass = getattr(importlib.import_module(module_name), class_name)
 
     agents = [
-        AgentClass(player_id=idx, num_actions=num_actions)
+        AgentClass(player_id=idx, state_representation_size = state_size, num_actions=num_actions)
         for idx in range(num_players)
     ]
 
@@ -53,89 +57,54 @@ def main(game_name, agent_class, comparison_point,  training_episodes):
     ]
 
 
-    previous_agents = None
-    agent_before_previous_agent = None
+    archive = {"Random:-10000":random_agents}
 
     with trange(training_episodes) as t:
         for cur_episode in t:
-            if cur_episode % int(1e4) == 0:
+            if cur_episode % int(1e4) == 0 and cur_episode!=0:
                 filename = f"{project_dir}/models/games/{game_name}/{class_name}:{cur_episode}.agent"
-                joblib.dump(agents, filename, compress = 3)
-
-            if cur_episode % (int(comparison_point) + 1) == 0:
-                print("Evaluating current and previous")
-                if(agent_before_previous_agent is None):
-                    agent_before_previous_agent = deepcopy(agents)
-                    print("before")
-                elif(agent_before_previous_agent is not None and previous_agents is None):
-                    previous_agents = deepcopy(agents)
-                    print("previous")
-                else:
-                    #play games
-                    def get_diff():
-                        scores_past = evaluate(env, deepcopy(previous_agents),
-                                                   deepcopy(agent_before_previous_agent),
-                                               1000, 0.1)
-
-                        scores_past = np.array(scores_past)
-
-                        scores_before_previous = evaluate(env, deepcopy(agents),
-                                          deepcopy(agent_before_previous_agent),
-                                                          1000, 0.1)
+                try:
+                    joblib.dump(agents, filename, compress = 3)
+                except (TypeError, IsADirectoryError):
+                    for agent in agents:
+                        agent.save(filename)
 
 
 
-                        scores_before_previous = np.array(scores_before_previous)
+            if (cur_episode + 1) % (int(comparison_point) ) == 0  :
+                current_agent = f"{class_name}:{cur_episode}"
 
-                        scores_before_previous_means = scores_before_previous.mean(axis=1)
+                print(bcolors.OKBLUE + f"Training" + bcolors.ENDC)
 
-                        scores_past_mean = scores_past.mean(axis=1)
+                try:
+                    models = [agents[0].model, agents[1].model]
+                    for agent in agents:
+                        agent.train_supervised()
 
-                        diff = scores_before_previous_means - scores_past_mean
+                    archive[current_agent] = deepcopy(agents)
 
-                        return diff
+                    df = run_tournament(game_name, 1000, archive)
+                    glicko_df = calculate_glicko_scores(df)
+                    glicko_df = glicko_df.sort_values(by=['glicko2'])
+                    is_latest_best = (glicko_df.iloc[-1][
+                                          "n_games"] == cur_episode)
 
-                    diff = get_diff()
 
-                    if diff.min() > 0.0:
-                        print(bcolors.OKGREEN + f"We have improvement --  {diff}" + bcolors.ENDC)
-
-                        try:
-                            models = [agents[0].model, agents[1].model]
-                            for agent in agents:
-                                agent.train_supervised()
-                            diff = get_diff()
-                            if(np.min(diff) > 0.01):
-                                print(bcolors.OKGREEN + f"reseting with --  {diff}" + bcolors.ENDC)
-                                for agent in agents:
-                                    agent._reset_dict()
-                                agent_before_previous_agent = previous_agents
-                                previous_agents = deepcopy(agents)
-                            else:
-                                print(
-                                    bcolors.FAIL + f"Horrible with --  {diff}" + bcolors.ENDC)
-                                for m, agent in enumerate(agents):
-                                    agent.model = models[m]
-
-                        except AttributeError:
-                            import traceback
-                            print(traceback.format_exc())
-                            print("Agents do not support supervised training")
+                    if(is_latest_best):
+                        print(bcolors.OKGREEN + f"Latest agent is elite" + bcolors.ENDC)
+                        for agent in agents:
+                            agent._reset_dict()
                     else:
-                        print(bcolors.FAIL + f"No improvement {diff}" + bcolors.ENDC)
+                        print(
+                            bcolors.FAIL + f"Still note there" + bcolors.ENDC)
+                        for m, agent in enumerate(agents):
+                            agent.model = models[m]
+                        del archive[current_agent]
 
-
-                    #print(scores_past_mean, scores_before_previous_means)
-                    # exit()
-                    #
-                    # #p1_scores = ttest_1samp(scores[0], 0)
-                    # #p2_scores = ttest_1samp(scores[0], 0)
-                    # #print(p1_scores, p2_scores)
-                    # if(scores.mean() > 0.0):
-                    #     print("Newer is better")
-                    #     previous_agents = deepcopy(agents)
-                    #     agents[0].test = "flag"
-                    #exit()
+                except AttributeError:
+                    import traceback
+                    print(traceback.format_exc())
+                    print("Agents do not support supervised training")
 
             t.set_description(f"Game {cur_episode}")
 

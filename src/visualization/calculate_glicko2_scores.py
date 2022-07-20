@@ -1,4 +1,4 @@
-from glicko2 import Glicko2, WIN, LOSS, DRAW
+from visualization.glicko2 import Glicko2, WIN, LOSS, DRAW
 import pandas as pd
 from pathlib import Path
 import click
@@ -7,10 +7,7 @@ import seaborn as sns
 from pathlib import Path
 
 
-def calculate_glicko_scores(input_filepath):
-    # project_dir = Path(__file__).resolve().parents[2]
-    df = pd.read_csv(input_filepath, index_col=0)
-
+def calculate_glicko_scores(df):
     all_players = set(pd.concat([df["player_1"], df["player_2"]]))
 
     env = Glicko2(tau=0.5)
@@ -58,18 +55,6 @@ def calculate_glicko_scores(input_filepath):
         rated = env.rate(ratings[player][0], games)
         new_ratings[player] = rated, ratings[player][1], ratings[player][2]
         print(player, rated)
-    return new_ratings
-    
-
-@click.command()
-@click.argument('input_filepath', type=click.Path(exists=True))
-def main(input_filepath):
-
-    new_ratings = calculate_glicko_scores(input_filepath)
-
-    path = Path(input_filepath).parents[0]
-    name = Path(input_filepath).stem
-    df_filename = f"{path}/{name}_glicko.csv"
 
     map_results = {"n_games": [],
                    "glicko2": [],
@@ -85,7 +70,27 @@ def main(input_filepath):
         map_results["glicko2_upper"].append(r.mu + r.phi)
         map_results["agent_name"].append(agent)
 
+
+
     df_results_all = pd.DataFrame(data=map_results)
+
+    return df_results_all
+
+
+
+@click.command()
+@click.argument('input_filepath', type=click.Path(exists=True))
+def main(input_filepath):
+
+    df = pd.read_csv(input_filepath, index_col=0)
+
+    df_results_all = calculate_glicko_scores(df)
+
+    path = Path(input_filepath).parents[0]
+    name = Path(input_filepath).stem
+    df_filename = f"{path}/{name}_glicko.csv"
+
+
     df_results_all.to_csv(df_filename)
     for colour, agent in enumerate(set(df_results_all["agent_name"])):
         df_results = df_results_all[df_results_all["agent_name"] == agent]
@@ -107,7 +112,7 @@ def main(input_filepath):
         "Number of training games (with negative games indicating uniform random player)")
     plt.savefig(f"reports/figures/{name}.pdf", bbox_inches='tight')
     plt.savefig(f"reports/figures/{name}.png", bbox_inches='tight')
-    plt.show()
+    #plt.show()
 
 
 if __name__ == '__main__':

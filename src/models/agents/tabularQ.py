@@ -29,7 +29,7 @@ def valuedict():
     return collections.defaultdict(float)
 
 
-class QLearner(rl_agent.AbstractAgent):
+class QLearning(rl_agent.AbstractAgent):
     """Tabular Q-Learning agent.
 
     See open_spiel/python/examples/tic_tac_toe_qlearner.py for an usage example.
@@ -37,13 +37,14 @@ class QLearner(rl_agent.AbstractAgent):
 
     def __init__(self,
                  player_id,
+                 state_representation_size, ## ignored
                  num_actions,
                  step_size=0.1,
-                 epsilon_schedule=rl_tools.ConstantSchedule(0.2),
+                 epsilon_schedule=rl_tools.ConstantSchedule(0.1),
                  discount_factor=1.0,
                  centralized=False):
         """Initialize the Q-Learning agent."""
-        self._player_id = player_id
+        self._playeropen_spiel.python.algorithms.tabular_qlearner.QLearner_id = player_id
         self._num_actions = num_actions
         self._step_size = step_size
         self._epsilon_schedule = epsilon_schedule
