@@ -1,4 +1,5 @@
-agents.dqn.DQN
-agents.lugl.LUGLLightGBM
 agents.lugl.LUGLLinear
+agents.lugl.LUGLDecisionTree
+agents.lugl.LUGLLightGBM
+agents.dqn.DQN
 #agents.lugl.LUGLNeuralNetwork

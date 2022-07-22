@@ -27,7 +27,7 @@ def run_tournament(game, n_games, agents):
             agent_name_2, agent_2 = random.choice(list(agents.items()))
 
         win_rates_vs_random = evaluate(env, agent_1, agent_2,
-                                       10)
+                                       1)
 
         for pos in [0, 1]:
             for win in range(len(win_rates_vs_random[pos])):

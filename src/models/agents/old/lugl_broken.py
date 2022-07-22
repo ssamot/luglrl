@@ -25,44 +25,13 @@ from open_spiel.python import rl_agent
 from open_spiel.python import rl_tools
 from sklearn import metrics
 from category_encoders import TargetEncoder
+import random
+
+
 from sklearn import linear_model
 
 
 
-
-def replay(buffer,discount_factor, q_values, step_size):
-    mean_loss = []
-    for prev, state_actions, r, t in buffer:
-        target = r
-        if not t:  # Q values are zero for terminal.
-            target += discount_factor * np.max(
-                [q_values[state_action] for state_action
-                 in state_actions])
-        prev_q_value = q_values[prev]
-        loss = target - prev_q_value
-        # print(loss)
-        q_values[prev] += (
-                step_size * loss)
-        mean_loss.append(loss)
-    print("Replay loss", np.mean(mean_loss))
-
-
-def init_replay(buffer,discount_factor, q_values, step_size):
-    mean_loss = []
-    for prev in buffer.keys():
-        state_actions, r, t = buffer[prev]
-        target = r
-        if not t:  # Q values are zero for terminal.
-            target += discount_factor * np.max(
-                [q_values[state_action] for state_action
-                 in state_actions])
-        prev_q_value = q_values[prev]
-        loss = target - prev_q_value
-        # print(loss)
-        q_values[prev] = target
-        mean_loss.append(loss)
-
-    return np.mean(mean_loss)
 
 class keydefaultdict(collections.defaultdict):
     def __missing__(self, key):
@@ -112,11 +81,10 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
 
     def __setstate__(self, state):
         self.__dict__ = state
-        self._reset_dict()
+        #self._reset_dict()
 
     def _reset_dict(self):
         self._q_values = keydefaultdict(self._default_value)
-        self._buffer = {}
 
     def _default_value(self, key):
         if(self.model is None):
@@ -133,9 +101,10 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
 
             return value[0][0]
 
+
+
     def get_state_action(self, info_state, action):
         return (tuple(info_state), tuple([action]))
-
 
 
     def _epsilon_greedy(self, info_state, legal_actions, epsilon):
@@ -155,15 +124,19 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         # q_values[info_state][a]  transformed to q_values[tuple(info_state) + tuple(a)]
         probs = np.zeros(self._num_actions)
 
-        q_values = [self._q_values[self.get_state_action(info_state,a)] + np.random.random()*0.0001 for a in legal_actions]
-        greedy_q = np.argmax(q_values)
-        #print(q_values)
 
+        greedy_q = max([self._q_values[self.get_state_action(info_state,a)] for a in legal_actions])
+
+        greedy_actions = [
+            a for a in legal_actions if
+            self._q_values[self.get_state_action(info_state,a)] == greedy_q
+        ]
         probs[legal_actions] = epsilon / len(legal_actions)
-        probs[legal_actions[greedy_q]] +=(1 - epsilon)
-        #print(probs, np.sum(probs))
+        probs[greedy_actions] += (1 - epsilon) / len(greedy_actions)
         action = np.random.choice(range(self._num_actions), p=probs)
+        #print(action, probs)
         return action, probs
+
 
     def step(self, time_step, is_evaluation=False):
         """Returns the action to be taken and updates the Q-values if needed.
@@ -195,10 +168,9 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         if self._prev_info_state and not is_evaluation:
             #print("training")
             target = time_step.rewards[self._player_id]
-            state_actions = [self.get_state_action(info_state,a) for a in legal_actions]
             if not time_step.last():  # Q values are zero for terminal.
                 target += self._discount_factor * max(
-                    [self._q_values[state_action] for state_action in state_actions])
+                    [self._q_values[self.get_state_action(info_state,a)] for a in legal_actions])
             #print(target)
             prev = self.get_state_action(self._prev_info_state,self._prev_action)
             prev_q_value = self._q_values[prev]
@@ -206,12 +178,6 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
             #print(target, prev_q_value)
             self._q_values[prev] += (
                     self._step_size * self._last_loss_value)
-
-            self._buffer[prev]=[
-                               [a for a in state_actions],
-                               time_step.rewards[self._player_id],
-                               time_step.last()
-                            ]
 
 
 
@@ -266,7 +232,6 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         print("About to start training")
         all_features = []
         all_Qs = []
-
         for key, q_value in self._q_values.items():
             if (q_value != 0):
                 state_features, action = list(
@@ -282,11 +247,11 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
             # print(len(state_features), len(action_features), len(total_features))
         X = np.array(all_features)
         y = np.array(all_Qs)
-        import os
-        N = 4
-        os.environ["OMP_NUM_THREADS"] = f"{N}"
-        os.environ['TF_NUM_INTEROP_THREADS'] = f"{N}"
-        os.environ['TF_NUM_INTRAOP_THREADS'] = f"{N}"
+        # import os
+        # N = 4
+        # os.environ["OMP_NUM_THREADS"] = f"{N}"
+        # os.environ['TF_NUM_INTEROP_THREADS'] = f"{N}"
+        # os.environ['TF_NUM_INTRAOP_THREADS'] = f"{N}"
 
         self.model = self.build_model(X.shape[1])
         print(X.shape, y.shape)
@@ -305,12 +270,6 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
 
 class LUGLLightGBM(LUGLNeuralNetwork):
 
-    def get_phi(self,  key):
-        state_features, action = list(key[0]), list(key[1])
-        total_features = state_features + action
-        phi = np.array(total_features)
-        return phi
-
     def _default_value(self, key):
         if (self.model is None):
 
@@ -328,12 +287,6 @@ class LUGLLightGBM(LUGLNeuralNetwork):
         print("About to start training")
         all_features = []
         all_Qs = []
-
-
-        loss = init_replay(self._buffer, self._discount_factor,
-                               self._q_values, self._step_size)
-        print("Replay loss", loss)
-
         for key, q_value in self._q_values.items():
             if(q_value!=0):
                 state_features, action = list(
@@ -357,112 +310,143 @@ class LUGLLightGBM(LUGLNeuralNetwork):
         print(mse, r2)
 
 
+class LUGLExtraTrees(LUGLNeuralNetwork):
+
+    # def _epsilon_greedy(self, info_state, legal_actions, epsilon):
+    #     epsilon = 0
+    #     probs = np.zeros(self._num_actions)
+    #
+    #     if(self.model is None):
+    #         greedy_q = max([self._q_values[self.get_state_action(info_state,a)] for a in legal_actions])
+    #         greedy_actions = [
+    #             a for a in legal_actions if
+    #             self._q_values[self.get_state_action(info_state, a)] == greedy_q
+    #         ]
+    #     else:
+    #         #print("choosing")
+    #         estimator = random.choice(self.model.estimators_)
+    #         q_values = ([self.get_value(estimator, self.get_state_action(info_state,a)) for a in legal_actions])
+    #         #print(greedy_q, "greedy_q")
+    #         greedy_q = np.argmax(q_values)
+    #         greedy_actions = [
+    #             a for a in legal_actions if
+    #             self._q_values[self.get_state_action(info_state, a)] == greedy_q
+    #         ]
+    #
+    #
+    #     probs[legal_actions] = epsilon / len(legal_actions)
+    #     probs[greedy_actions] += (1 - epsilon) / len(greedy_actions)
+    #     action = np.random.choice(range(self._num_actions), p=probs)
+    #     return action, probs
 
 
+    def get_value(self, model,  key):
+        state_features, action = list(key[0]), list(key[1])
+        total_features = state_features + action
+        phi = np.array(total_features)[np.newaxis,:]
 
-class LUGLDecisionTree(LUGLNeuralNetwork):
+        value = model.predict(phi)
+        #print(value)
+
+        return value[0]
 
     def _default_value(self, key):
-        if (self.model is None):
+        if(self.model is None):
+
             return 0.0
         else:
-            state_features, action = list(key[0]), key[1][0]
-            #print(action, "action")
-            phi = np.array(state_features)[np.newaxis, :]
-            if(self.model[action] is None):
-                return 0.0
-            else:
-                value = self.model[action].predict(phi)
-                return value[0]
+            state_features, action = list(key[0]), list(key[1])
+            total_features = state_features + action
+            phi = np.array(total_features)[np.newaxis,:]
+
+            value = self.model.predict(phi)
+            #print(value)
+
+            return value[0]
 
     def train_supervised(self):
 
         print("About to start training")
-
-        print(len(self._q_values))
-
-        loss = init_replay(self._buffer, self._discount_factor,
-                           self._q_values, self._step_size)
-        print("Replay loss", loss)
-
-        data_per_action = [[] for _ in range(self._num_actions)]
-        Qs_per_action = [[] for _ in range(self._num_actions)]
-        print(len(self._q_values), "Qvals")
+        all_features = []
+        all_Qs = []
         for key, q_value in self._q_values.items():
             if(q_value!=0):
                 state_features, action = list(
-                    key[0]), key[1][0]
+                    key[0]), key[1]
 
-                data_per_action[action].append(state_features)
-                Qs_per_action[action].append(q_value)
+                total_features = state_features + list(action)
+                all_Qs.append(q_value)
+                all_features.append(total_features)
+
+        X = np.array(all_features)
+        y = np.array(all_Qs)
+        #print(X.shape, y.shape)
+        #exit()
+        #self.encoder = TargetEncoder(cols=[X.shape[1]-1])
+        #self.encoder.fit(X, y)
+        #X_enc = self.encoder.transform(X)
+        #print(X_enc)
+
+        print(X.shape, y.shape)
+        from sklearn.ensemble import ExtraTreesRegressor
+        #from sklearn.tree import DecisionTreeRegressor
+        clf = ExtraTreesRegressor(n_jobs=12, n_estimators=100, bootstrap=True)
+
+        #clf = DecisionTreeRegressor()
+        clf.fit(X,y)
+        self.model = clf
+        mse = metrics.mean_squared_error(y, self.model.predict(X))
+        r2 = metrics.explained_variance_score(y, self.model.predict(X))
+
+        print(mse, r2)
 
 
+class LUGLLightGBMIncremental(LUGLNeuralNetwork):
 
-        self.model = []
-        total = 0
-        for action in range(len(data_per_action)):
-            X = np.array(data_per_action[action])
-            y = np.array(Qs_per_action[action])
-            total +=X.shape[0]
-            print(X.shape, y.shape)
-            if(X.shape[0] > 10):
-                from sklearn.model_selection import train_test_split
-                # X_train, X_test, y_train, y_test = train_test_split(X, y,
-                #                                                     random_state=0)
+    def _default_value(self, key):
+        if (self.model is None):
 
-                from sklearn.tree import DecisionTreeRegressor
-                from sklearn.metrics import mean_squared_error
-                #model = linear_model.LinearRegression()
-                from sklearn.model_selection import GridSearchCV
+            return 0.0
+        else:
+            state_features, action = list(key[0]), list(key[1])
+            total_features = state_features + action
+            phi = np.array(total_features)[np.newaxis, :]
+            values = []
+            for clf in self.model:
+                value = clf.predict(phi)
+                values.append(value[0])
 
-                # model = GridSearchCV(DecisionTreeRegressor(),
-                #                    param_grid={
-                #                        "max_depth": params },
-                #                    n_jobs=-1, cv=10,
-                #                    scoring="neg_mean_squared_error")
+            return np.mean(value)
 
-                model = DecisionTreeRegressor(min_samples_leaf=3)
+    def train_supervised(self):
 
-                #from lightgbm.sklearn import LGBMRegressor
-                #model = LGBMRegressor(n_jobs=6, n_estimators=100)
-                # model.fit(X_train, y_train)
-                #
-                # path = model.cost_complexity_pruning_path(X_train, y_train)
-                # ccp_alphas = path.ccp_alphas
-                # impurities = path.impurities
-                #
-                # clfs = []
-                # for ccp_alpha in ccp_alphas:
-                #     clf = DecisionTreeRegressor(random_state=0,
-                #                                  ccp_alpha=ccp_alpha)
-                #     clf.fit(X_train, y_train)
-                #     clfs.append(clf)
-                #
-                # ccp_alphas = ccp_alphas[:-1]
-                #
-                # best = 10000
-                # best_clf = -1
-                # for i, clf in enumerate(clfs):
-                #
-                #     y_test_hat = clf.predict(X_test)
-                #     score = mean_squared_error(y_test, y_test_hat)
-                #     if(score < best):
-                #         best  = score
-                #         best_clf = i
-                #
-                # print("Optimum alpha", ccp_alphas[best_clf])
+        print("About to start training")
+        all_features = []
+        all_Qs = []
+        for key, q_value in self._q_values.items():
+            if(q_value!=0):
+                state_features, action = list(
+                    key[0]), key[1]
 
-                #model = DecisionTreeRegressor(ccp_alpha=ccp_alphas[best_clf])
-                model.fit(X,y)
+                total_features = state_features + list(action)
+                all_Qs.append(q_value)
+                all_features.append(total_features)
 
-                mse = metrics.mean_squared_error(y, model.predict(X))
-                r2 = metrics.explained_variance_score(y, model.predict(X))
-                self.model.append(model)
-            else:
-                self.model.append(None)
+        X = np.array(all_features)
+        y = np.array(all_Qs)
 
-            print(mse, r2)
-        print("Total", total)
+        print(X.shape, y.shape)
+        from lightgbm.sklearn import LGBMRegressor
+        clf = LGBMRegressor(n_jobs=6,n_estimators=5)
+        clf.fit(X,y, categorical_feature = range(X.shape[1]))
+        if(self.model is None):
+            self.model = [clf]
+        else:
+            self.model.append(clf)
+        #mse = metrics.mean_squared_error(y, self.model.predict(X))
+        #r2 = metrics.explained_variance_score(y, self.model.predict(X))
+
+        #print(mse, r2)
 
 
 
@@ -475,35 +459,23 @@ class LUGLLinear(LUGLNeuralNetwork):
             state_features, action = list(key[0]), key[1][0]
             #print(action, "action")
             phi = np.array(state_features)[np.newaxis, :]
-            if(self.model[action] is None):
-                return 0.0
-            else:
-                value = self.model[action].predict(phi)
-                return value[0]
+            value = self.model[action].predict(phi)
+            print("value", value)
+            return value[0]
 
     def train_supervised(self):
 
         print("About to start training")
 
-        from copy import deepcopy
-        print(len(self._q_values))
-        #new_qs = deepcopy(self._q_values)
-        for i in range(1):
-            loss = init_replay(self._buffer,self._discount_factor, self._q_values, self._step_size)
-            if(abs(loss) <0.00000000001 ):
-                 break
-        print(len(self._q_values))
-
         data_per_action = [[] for _ in range(self._num_actions)]
         Qs_per_action = [[] for _ in range(self._num_actions)]
         print(len(self._q_values), "Qvals")
         for key, q_value in self._q_values.items():
-            if(q_value!=0):
-                state_features, action = list(
-                    key[0]), key[1][0]
+            state_features, action = list(
+                key[0]), key[1][0]
 
-                data_per_action[action].append(state_features)
-                Qs_per_action[action].append(q_value)
+            data_per_action[action].append(state_features)
+            Qs_per_action[action].append(q_value)
 
 
 
@@ -514,21 +486,13 @@ class LUGLLinear(LUGLNeuralNetwork):
             y = np.array(Qs_per_action[action])
             total +=X.shape[0]
             print(X.shape, y.shape)
-            if(X.shape[0] > 10):
-
-                #from sklearn.tree import DecisionTreeRegressor
-                model = linear_model.LinearRegression()
-
-                #from lightgbm.sklearn import LGBMRegressor
-                #model = LGBMRegressor(n_jobs=6, n_estimators=100)
-                model.fit(X,y)
-                #print(model.best_params_)
-
-                mse = metrics.mean_squared_error(y, model.predict(X))
-                r2 = metrics.explained_variance_score(y, model.predict(X))
-                self.model.append(model)
-            else:
-                self.model.append(None)
+            # model = linear_model.LinearRegression()
+            from lightgbm.sklearn import LGBMRegressor
+            model = LGBMRegressor(n_jobs=6, n_estimators=5)
+            model.fit(X,y)
+            mse = metrics.mean_squared_error(y, model.predict(X))
+            r2 = metrics.explained_variance_score(y, model.predict(X))
+            self.model.append(model)
 
             print(mse, r2)
         print("Total", total)
