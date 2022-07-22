@@ -44,7 +44,7 @@ requirements: test_environment
 	$(PYTHON_INTERPRETER) -m pip install -r requirements.txt
 
 ## Make Dataset
-Q_TTT:
+RUN_TOURNAMENTS:
 	$(PYTHON_INTERPRETER) src/models/train_agents.py {GAME_TYPE} ${AGENT_TYPE}  5000 200001
 
 LSPI_TTT:
