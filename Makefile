@@ -15,7 +15,7 @@ LUGL_nn = agents.lugl.LUGLNeuralNetwork
 LUGL_linear = agents.lugl.LUGLLinear
 LUGL_lightGBM = agents.lugl.LUGLLightGBM
 DQN = agents.dqn.DQN
-
+backup_dir = BACKUP_$(shell date +"%d-%m-%Y")
 
 TTT = tic_tac_toe
 CHESS = chess
@@ -29,7 +29,6 @@ else
 HAS_CONDA=True
 endif
 
-export PYTHONPATH=./src
 
 #################################################################################
 # COMMANDS                                                                      #
@@ -44,51 +43,31 @@ requirements: test_environment
 	$(PYTHON_INTERPRETER) -m pip install -r requirements.txt
 
 ## Make Dataset
-RUN_TOURNAMENTS:
-	$(PYTHON_INTERPRETER) src/models/train_agents.py {GAME_TYPE} ${AGENT_TYPE}  5000 200001
+train_agents:
+	bash ./train_agents.sh background
 
-LSPI_TTT:
-	$(PYTHON_INTERPRETER) src/models/train_agents.py tic_tac_toe ${LSPI}  5000 200001
+clean:
+	killall -9 python
+	rm -rf ./models/games/*
+	rm ./logs/*
 
-LSPILinear_TTT:
-	$(PYTHON_INTERPRETER) src/models/train_agents.py tic_tac_toe ${LSPILinear}  5000 200001
+backup:
+	mkdir $(backup_dir)
+	cp -r models $(backup_dir)
+	cp -r data $(backup_dir)
+	cp -r reports $(backup_dir)
 
+run_tournaments:
+	bash ./run_tournaments.sh background
 
-LSPI_C4:
-	$(PYTHON_INTERPRETER) src/models/train_agents.py connect_four ${LSPI}  5000 200001
-
-LSPILinear_C4:
-	$(PYTHON_INTERPRETER) src/models/train_agents.py connect_four ${LSPILinear}  5000 200001
-
-
-LSPI_CHESS:
-	$(PYTHON_INTERPRETER) src/models/train_agents.py chess ${LSPI}  5000 200001
-
-
-DQN_TTT:
-	$(PYTHON_INTERPRETER) src/models/train_agents.py tic_tac_toe ${DQN}  5000 200001
-
-
-Q_C4:
-	$(PYTHON_INTERPRETER) src/models/train_agents.py connect_four ${TABULAR_Q_AGENT}  5000 200001
-
-TOURNAMENT_C4:
-	$(PYTHON_INTERPRETER) src/models/run_tournament.py connect_four 1000
-
-TOURNAMENT_TTT:
-	$(PYTHON_INTERPRETER) src/models/run_tournament.py tic_tac_toe 2000
-
-GLICKO_TTT:
-	$(PYTHON_INTERPRETER) src/visualization/calculate_glicko2_scores.py data/interim/tic_tac_toe.csv
-
-GLICKO_C4:
-	$(PYTHON_INTERPRETER) src/visualization/calculate_glicko2_scores.py data/interim/connect_four.csv
+calculate_glicko:
+	bash ./run_glicko.sh background
 
 
 ## Delete all compiled Python files
-clean:
-	find . -type f -name "*.py[co]" -delete
-	find . -type d -name "__pycache__" -delete
+#clean:
+#	find . -type f -name "*.py[co]" -delete
+#	find . -type d -name "__pycache__" -delete
 
 ## Lint using flake8
 lint:

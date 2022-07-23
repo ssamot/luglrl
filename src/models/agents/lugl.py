@@ -26,18 +26,24 @@ from open_spiel.python import rl_tools
 from sklearn import metrics
 from category_encoders import TargetEncoder
 from sklearn import linear_model
+from copy import deepcopy
 
 
 
 
 def replay(buffer,discount_factor, q_values, step_size):
     mean_loss = []
-    for prev, state_actions, r, t in buffer:
-        target = r
-        if not t:  # Q values are zero for terminal.
-            target += discount_factor * np.max(
-                [q_values[state_action] for state_action
-                 in state_actions])
+    for elements in buffer:
+        all_targets = []
+        for prev, state_actions, r, t in elements:
+            target = r
+            if not t:  # Q values are zero for terminal.
+                target += discount_factor * np.max(
+                    [q_values[state_action] for state_action
+                     in state_actions])
+            all_targets.append(target)
+        target = np.mean(all_targets)
+        print(len(all_targets))
         prev_q_value = q_values[prev]
         loss = target - prev_q_value
         # print(loss)
@@ -50,12 +56,16 @@ def replay(buffer,discount_factor, q_values, step_size):
 def init_replay(buffer,discount_factor, q_values, step_size):
     mean_loss = []
     for prev in buffer.keys():
-        state_actions, r, t = buffer[prev]
-        target = r
-        if not t:  # Q values are zero for terminal.
-            target += discount_factor * np.max(
-                [q_values[state_action] for state_action
-                 in state_actions])
+        all_targets = []
+        for state_actions, r, t  in buffer[prev]:
+            target = r
+            if not t:  # Q values are zero for terminal.
+                target += discount_factor * np.max(
+                    [q_values[state_action] for state_action
+                     in state_actions])
+            all_targets.append(target)
+        target = np.mean(all_targets)
+        #print(len(all_targets))
         prev_q_value = q_values[prev]
         loss = target - prev_q_value
         # print(loss)
@@ -108,6 +118,7 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
     def __getstate__(self):
         state = dict(self.__dict__)
         del state['_q_values']
+        del state['_buffer']
         return state
 
     def __setstate__(self, state):
@@ -135,6 +146,18 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
 
     def get_state_action(self, info_state, action):
         return (tuple(info_state), tuple([action]))
+
+    def replay(self):
+        cloned_q = deepcopy(self._q_values)
+        for _ in range(1):
+            loss = init_replay(self._buffer, self._discount_factor,
+                               cloned_q, self._step_size)
+            print("Replay loss", loss)
+            if(loss == 0.0):
+                break;
+        #print(cloned_q.values())
+        #exit()
+        return cloned_q
 
 
 
@@ -207,11 +230,14 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
             self._q_values[prev] += (
                     self._step_size * self._last_loss_value)
 
-            self._buffer[prev]=[
-                               [a for a in state_actions],
-                               time_step.rewards[self._player_id],
-                               time_step.last()
-                            ]
+            if(prev not in self._buffer):
+                self._buffer[prev] = []
+
+            self._buffer[prev].append([
+                [a for a in state_actions],
+                time_step.rewards[self._player_id],
+                time_step.last()
+            ])
 
 
 
@@ -330,11 +356,9 @@ class LUGLLightGBM(LUGLNeuralNetwork):
         all_Qs = []
 
 
-        loss = init_replay(self._buffer, self._discount_factor,
-                               self._q_values, self._step_size)
-        print("Replay loss", loss)
+        q_values = self.replay()
 
-        for key, q_value in self._q_values.items():
+        for key, q_value in q_values.items():
             if(q_value!=0):
                 state_features, action = list(
                     key[0]), key[1]
@@ -381,14 +405,12 @@ class LUGLDecisionTree(LUGLNeuralNetwork):
 
         print(len(self._q_values))
 
-        loss = init_replay(self._buffer, self._discount_factor,
-                           self._q_values, self._step_size)
-        print("Replay loss", loss)
+        q_values = self.replay()
 
         data_per_action = [[] for _ in range(self._num_actions)]
         Qs_per_action = [[] for _ in range(self._num_actions)]
-        print(len(self._q_values), "Qvals")
-        for key, q_value in self._q_values.items():
+
+        for key, q_value in q_values.items():
             if(q_value!=0):
                 state_features, action = list(
                     key[0]), key[1][0]
@@ -485,19 +507,12 @@ class LUGLLinear(LUGLNeuralNetwork):
 
         print("About to start training")
 
-        from copy import deepcopy
-        print(len(self._q_values))
-        #new_qs = deepcopy(self._q_values)
-        for i in range(1):
-            loss = init_replay(self._buffer,self._discount_factor, self._q_values, self._step_size)
-            if(abs(loss) <0.00000000001 ):
-                 break
-        print(len(self._q_values))
+        q_values = self.replay()
 
         data_per_action = [[] for _ in range(self._num_actions)]
         Qs_per_action = [[] for _ in range(self._num_actions)]
         print(len(self._q_values), "Qvals")
-        for key, q_value in self._q_values.items():
+        for key, q_value in q_values.items():
             if(q_value!=0):
                 state_features, action = list(
                     key[0]), key[1][0]

@@ -92,7 +92,9 @@ def main(input_filepath):
 
 
     df_results_all.to_csv(df_filename)
-    for colour, agent in enumerate(set(df_results_all["agent_name"])):
+    agent_names = list(set(df_results_all["agent_name"]))
+    agent_names.sort()
+    for colour, agent in enumerate(agent_names):
         df_results = df_results_all[df_results_all["agent_name"] == agent]
         df_results = df_results.sort_values(by=['n_games'])
 
