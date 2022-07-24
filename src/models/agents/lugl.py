@@ -406,6 +406,7 @@ class LUGLDecisionTree(LUGLNeuralNetwork):
         print(len(self._q_values))
 
         q_values = self.replay()
+        #q_values = self._q_values
 
         data_per_action = [[] for _ in range(self._num_actions)]
         Qs_per_action = [[] for _ in range(self._num_actions)]
@@ -432,7 +433,7 @@ class LUGLDecisionTree(LUGLNeuralNetwork):
                 # X_train, X_test, y_train, y_test = train_test_split(X, y,
                 #                                                     random_state=0)
 
-                from sklearn.tree import DecisionTreeRegressor
+                from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
                 from sklearn.metrics import mean_squared_error
                 #model = linear_model.LinearRegression()
                 from sklearn.model_selection import GridSearchCV
@@ -443,7 +444,16 @@ class LUGLDecisionTree(LUGLNeuralNetwork):
                 #                    n_jobs=-1, cv=10,
                 #                    scoring="neg_mean_squared_error")
 
-                model = DecisionTreeRegressor(min_samples_leaf=3)
+                from sklearn.pipeline import Pipeline
+                from sklearn import random_projection
+                from sklearn.manifold import LocallyLinearEmbedding
+                clf = DecisionTreeRegressor(min_samples_leaf=3)
+                #clf = linear_model.LinearRegression()
+                
+
+                model = Pipeline([('projection', random_projection.GaussianRandomProjection(n_components=X.shape[1])), ('clf', clf)])
+                #model = Pipeline([('projection',
+                #                   LocallyLinearEmbedding(n_components=10)), ('clf', clf)])
 
                 #from lightgbm.sklearn import LGBMRegressor
                 #model = LGBMRegressor(n_jobs=6, n_estimators=100)
@@ -490,6 +500,13 @@ class LUGLDecisionTree(LUGLNeuralNetwork):
 
 class LUGLLinear(LUGLNeuralNetwork):
 
+    def transform(self, y):
+        return (y + 1) / 2
+
+    def inverse_transform(self, y):
+        return np.clip(y,-1, 1)
+        #return (y * 2) - 1
+
     def _default_value(self, key):
         if (self.model is None):
             return 0.0
@@ -501,7 +518,7 @@ class LUGLLinear(LUGLNeuralNetwork):
                 return 0.0
             else:
                 value = self.model[action].predict(phi)
-                return value[0]
+                return self.inverse_transform(value[0])
 
     def train_supervised(self):
 
@@ -531,11 +548,24 @@ class LUGLLinear(LUGLNeuralNetwork):
             print(X.shape, y.shape)
             if(X.shape[0] > 10):
 
-                #from sklearn.tree import DecisionTreeRegressor
-                model = linear_model.LinearRegression()
 
                 #from lightgbm.sklearn import LGBMRegressor
                 #model = LGBMRegressor(n_jobs=6, n_estimators=100)
+                from sklearn.preprocessing import StandardScaler
+                from sklearn.pipeline import Pipeline
+
+                from sklearn.pipeline import Pipeline
+                from sklearn import random_projection
+                clf = linear_model.LinearRegression()
+
+                model = Pipeline([('projection',
+                                   random_projection.GaussianRandomProjection(
+                                       n_components=X.shape[1])), ('clf', clf)])
+
+
+                #y = self.transform(y)
+                #print(y.max(), y.min())
+
                 model.fit(X,y)
                 #print(model.best_params_)
 

@@ -83,11 +83,19 @@ def main(game_name, agent_class, comparison_point,  training_episodes):
 
                     archive[current_agent] = deepcopy(agents)
 
-                    df = run_tournament(game_name, len(archive)*3, archive)
+                    df = run_tournament(game_name, len(archive)*30, archive)
                     glicko_df = calculate_glicko_scores(df)
                     glicko_df = glicko_df.sort_values(by=['glicko2'])
                     is_latest_best = (glicko_df.iloc[-1][
                                           "n_games"] == cur_episode)
+
+                    if(is_latest_best):
+                        best = glicko_df.iloc[-1]
+                        second_best = glicko_df.iloc[-2]
+                        if(best["glicko2_lower"] > second_best["glicko2_upper"] ):
+                            print("Confidently best", best["glicko2_lower"], second_best["glicko2_upper"])
+                        else:
+                            is_latest_best = False
 
 
                     if(is_latest_best):
