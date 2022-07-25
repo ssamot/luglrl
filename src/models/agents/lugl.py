@@ -147,17 +147,17 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
     def get_state_action(self, info_state, action):
         return (tuple(info_state), tuple([action]))
 
-    def replay(self):
-        cloned_q = deepcopy(self._q_values)
-        for _ in range(1):
-            loss = init_replay(self._buffer, self._discount_factor,
-                               cloned_q, self._step_size)
-            print("Replay loss", loss)
-            if(loss == 0.0):
-                break;
-        #print(cloned_q.values())
-        #exit()
-        return cloned_q
+    # def replay(self):
+    #     cloned_q = (self._q_values)
+    #     for _ in range(1):
+    #         loss = init_replay(self._buffer, self._discount_factor,
+    #                            cloned_q, self._step_size)
+    #         print("Replay loss", loss)
+    #         if(loss == 0.0):
+    #             break;
+    #     #print(cloned_q.values())
+    #     #exit()
+    #     return cloned_q
 
 
 
@@ -356,7 +356,8 @@ class LUGLLightGBM(LUGLNeuralNetwork):
         all_Qs = []
 
 
-        q_values = self.replay()
+        #q_values = self.replay()
+        q_values = self._q_values
 
         for key, q_value in q_values.items():
             if(q_value!=0):
@@ -405,8 +406,8 @@ class LUGLDecisionTree(LUGLNeuralNetwork):
 
         print(len(self._q_values))
 
-        q_values = self.replay()
-        #q_values = self._q_values
+        #q_values = self.replay()
+        q_values = self._q_values
 
         data_per_action = [[] for _ in range(self._num_actions)]
         Qs_per_action = [[] for _ in range(self._num_actions)]
@@ -448,52 +449,17 @@ class LUGLDecisionTree(LUGLNeuralNetwork):
                 from sklearn import random_projection
                 from sklearn.manifold import LocallyLinearEmbedding
                 clf = DecisionTreeRegressor(min_samples_leaf=3)
-                #clf = linear_model.LinearRegression()
-                
-
-                model = Pipeline([('projection', random_projection.GaussianRandomProjection(n_components=X.shape[1])), ('clf', clf)])
-                #model = Pipeline([('projection',
-                #                   LocallyLinearEmbedding(n_components=10)), ('clf', clf)])
-
-                #from lightgbm.sklearn import LGBMRegressor
-                #model = LGBMRegressor(n_jobs=6, n_estimators=100)
-                # model.fit(X_train, y_train)
-                #
-                # path = model.cost_complexity_pruning_path(X_train, y_train)
-                # ccp_alphas = path.ccp_alphas
-                # impurities = path.impurities
-                #
-                # clfs = []
-                # for ccp_alpha in ccp_alphas:
-                #     clf = DecisionTreeRegressor(random_state=0,
-                #                                  ccp_alpha=ccp_alpha)
-                #     clf.fit(X_train, y_train)
-                #     clfs.append(clf)
-                #
-                # ccp_alphas = ccp_alphas[:-1]
-                #
-                # best = 10000
-                # best_clf = -1
-                # for i, clf in enumerate(clfs):
-                #
-                #     y_test_hat = clf.predict(X_test)
-                #     score = mean_squared_error(y_test, y_test_hat)
-                #     if(score < best):
-                #         best  = score
-                #         best_clf = i
-                #
-                # print("Optimum alpha", ccp_alphas[best_clf])
-
-                #model = DecisionTreeRegressor(ccp_alpha=ccp_alphas[best_clf])
+                model = clf
                 model.fit(X,y)
 
                 mse = metrics.mean_squared_error(y, model.predict(X))
                 r2 = metrics.explained_variance_score(y, model.predict(X))
+                print(mse, r2)
                 self.model.append(model)
             else:
                 self.model.append(None)
 
-            print(mse, r2)
+
         print("Total", total)
 
 
@@ -524,7 +490,8 @@ class LUGLLinear(LUGLNeuralNetwork):
 
         print("About to start training")
 
-        q_values = self.replay()
+        #q_values = self.replay()
+        q_values = self._q_values
 
         data_per_action = [[] for _ in range(self._num_actions)]
         Qs_per_action = [[] for _ in range(self._num_actions)]
@@ -557,12 +524,12 @@ class LUGLLinear(LUGLNeuralNetwork):
                 from sklearn.pipeline import Pipeline
                 from sklearn import random_projection
                 clf = linear_model.LinearRegression()
+                from sklearn.kernel_approximation import RBFSampler
+                from sklearn.kernel_approximation import PolynomialCountSketch
 
-                model = Pipeline([('projection',
-                                   random_projection.GaussianRandomProjection(
-                                       n_components=X.shape[1])), ('clf', clf)])
+                model = Pipeline([('projection',PolynomialCountSketch()), ('clf', clf)])
 
-
+                #model = clf
                 #y = self.transform(y)
                 #print(y.max(), y.min())
 
@@ -576,4 +543,101 @@ class LUGLLinear(LUGLNeuralNetwork):
                 self.model.append(None)
 
             print(mse, r2)
+        print("Total", total)
+
+
+
+class LUGLRandomForest(LUGLNeuralNetwork):
+
+    def _default_value(self, key):
+        if (self.model is None):
+            return 0.0
+        else:
+            state_features, action = list(key[0]), key[1][0]
+            #print(action, "action")
+            phi = np.array(state_features)[np.newaxis, :]
+            if(self.model[action] is None):
+                return 0.0
+            else:
+                #r = np.random.randint(0, self.model[action].n_estimators)
+                value = self.model[action].predict(phi)
+                return value[0]
+
+    def train_supervised(self):
+
+        print("About to start training")
+
+        print(len(self._q_values))
+
+        #q_values = self.replay()
+        q_values = self._q_values
+
+        data_per_action = [[] for _ in range(self._num_actions)]
+        Qs_per_action = [[] for _ in range(self._num_actions)]
+
+        for key, q_value in q_values.items():
+            if(q_value!=0):
+                state_features, action = list(
+                    key[0]), key[1][0]
+
+                data_per_action[action].append(state_features)
+                Qs_per_action[action].append(q_value)
+
+
+
+        self.model = []
+        total = 0
+        for action in range(len(data_per_action)):
+            X = np.array(data_per_action[action])
+            y = np.array(Qs_per_action[action])
+            total +=X.shape[0]
+            print(X.shape, y.shape)
+            if(X.shape[0] > 10):
+                from sklearn.model_selection import train_test_split
+                # X_train, X_test, y_train, y_test = train_test_split(X, y,
+                #                                                     random_state=0)
+
+                from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
+                from sklearn.metrics import mean_squared_error
+                #model = linear_model.LinearRegression()
+                from sklearn.model_selection import GridSearchCV
+
+                # model = GridSearchCV(DecisionTreeRegressor(),
+                #                    param_grid={
+                #                        "max_depth": params },
+                #                    n_jobs=-1, cv=10,
+                #                    scoring="neg_mean_squared_error")
+
+                from sklearn.ensemble import ExtraTreesRegressor
+                from sklearn.manifold import LocallyLinearEmbedding
+                from sklearn.tree import DecisionTreeRegressor
+                from sklearn.kernel_approximation import RBFSampler
+                #clf = ExtraTreesRegressor(min_samples_leaf=3, bootstrap=True, n_jobs=20)
+
+                from lightgbm.sklearn import LGBMRegressor
+                from sklearn.pipeline import Pipeline
+                #clf = LGBMRegressor(n_jobs=12, n_estimators=100,boosting_type="rf",bagging_freq = 1, bagging_fraction = 0.7)
+
+
+                model = ExtraTreesRegressor( bootstrap=True, n_jobs=20, n_estimators=1000)
+                pipe = Pipeline([('scaler', RBFSampler()), ('svc', model)])
+
+                pipe.fit(X,y)
+                y_hat = pipe.predict(X)
+
+                model = DecisionTreeRegressor()
+                pipe = Pipeline(
+                    [('scaler', RBFSampler()), ('svc', model)])
+                pipe = model
+                model.fit(X,y_hat)
+                print("Max depth", model.tree_.max_depth,)
+
+                mse = metrics.mean_squared_error(y, model.predict(X))
+                r2 = metrics.explained_variance_score(y, model.predict(X))
+                print(mse, r2)
+                self.model.append(model)
+            else:
+                self.model.append(None)
+
+
         print("Total", total)
