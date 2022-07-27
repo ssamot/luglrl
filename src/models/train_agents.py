@@ -61,7 +61,7 @@ def main(game_name, agent_class, comparison_point,  training_episodes):
 
     with trange(training_episodes) as t:
         for cur_episode in t:
-            if cur_episode % int(1e4) == 0 and cur_episode!=0:
+            if cur_episode % int(2e4) == 0 and cur_episode!=0:
                 filename = f"{project_dir}/models/games/{game_name}/{class_name}:{cur_episode}.agent"
                 try:
                     joblib.dump(agents, filename, compress = 3)
@@ -108,6 +108,8 @@ def main(game_name, agent_class, comparison_point,  training_episodes):
                         for m, agent in enumerate(agents):
                             agent.model = models[m]
                         del archive[current_agent]
+
+                    
 
                 except AttributeError:
                     import traceback

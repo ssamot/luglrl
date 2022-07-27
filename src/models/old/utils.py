@@ -8,7 +8,7 @@ import numpy as np
 def custom_reg(weight_matrix):
     # we like our weights large!
     clipped_matrix = tf.clip_by_value(weight_matrix,-10,10)
-    return -0.001*tf.reduce_sum(clipped_matrix*clipped_matrix)
+    return -0.01*tf.reduce_sum(clipped_matrix*clipped_matrix)
 
 
 class Hadamard(keras.layers.Layer):
@@ -29,12 +29,12 @@ class Hadamard(keras.layers.Layer):
         )
 
     def call(self, inputs):
-        k = tf.multiply(inputs, (tf.sigmoid(self.w)))
+        k = tf.multiply(inputs, ((self.w)))
         return k
 
     def get_example(self):
         print(self.w)
-        return (tf.sigmoid(self.w))
+        return ((self.w))
 
 
 def neg_mean_euc_dist(vects):

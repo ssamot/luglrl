@@ -88,9 +88,9 @@ def main(game_name, n_games):
 
                     try:
                         for player, agent in enumerate(my_agents):
-                            print(file + f"/{player}")
+                            #print(file + f"/{player}")
                             agent.restore(file + f"/{player}")
-                            print("............................")
+                            #print("............................")
                     except ValueError:
                         continue
                     agents[stem] = my_agents

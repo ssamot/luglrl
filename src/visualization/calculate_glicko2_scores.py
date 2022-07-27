@@ -78,6 +78,26 @@ def calculate_glicko_scores(df):
 
 
 
+import numpy
+def smooth(x,window_len=11,window='hanning'):
+        if x.ndim != 1:
+            raise ValueError("smooth only accepts 1 dimension arrays.")
+        if x.size < window_len:
+            raise ValueError(
+                "Input vector needs to be bigger than window size.")
+        if window_len<3:
+                return x
+        if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
+            raise ValueError(
+                "Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
+        s=numpy.r_[2*x[0]-x[window_len-1::-1],x,2*x[-1]-x[-1:-window_len:-1]]
+        if window == 'flat': #moving average
+                w=numpy.ones(window_len,'d')
+        else:
+                w=eval('numpy.'+window+'(window_len)')
+        y=numpy.convolve(w/w.sum(),s,mode='same')
+        return y[window_len:-window_len+1]
+
 @click.command()
 @click.argument('input_filepath', type=click.Path(exists=True))
 def main(input_filepath):
@@ -99,13 +119,23 @@ def main(input_filepath):
         df_results = df_results.sort_values(by=['n_games'])
 
         colour = sns.color_palette("deep")[colour]
+        x = (df_results["n_games"].to_numpy())
+        y = (df_results["glicko2"].to_numpy())
+        if(y.size > 50):
+            y = smooth(y)
+        print(x.shape, y.shape)
 
-        plt.plot(df_results["n_games"], df_results["glicko2"], color=colour,
+        plt.plot(x, y, color=colour,
                  label=agent)
         # plt.plot(xfit, yfit, '-', color='gray')
         #
-        plt.fill_between(df_results["n_games"], df_results["glicko2_lower"],
-                         df_results["glicko2_upper"],
+        y_lower = df_results["glicko2_lower"].to_numpy()
+        y_upper = df_results["glicko2_upper"].to_numpy()
+        if(y_upper.size > 50):
+            y_lower = smooth(y_lower)
+            y_upper = smooth(y_upper)
+        plt.fill_between(df_results["n_games"], y_lower,
+                         y_upper,
                          color=colour,
                          alpha=0.5)
     plt.legend()

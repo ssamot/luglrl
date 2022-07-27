@@ -1,7 +1,9 @@
-agents.lugl.LUGLNeuralNetwork
+agents.LUGLUCB.LUGLUCBLightGBM
+agents.LUGLUCB.LUGLUCBDecisionTree
 agents.lugl.LUGLLinear
-agents.lugl.LUGLRandomForest
-agents.lugl.LUGLDecisionTree
 agents.lugl.LUGLLightGBM
+agents.lugl.LUGLDecisionTree
 agents.dqn.DQN
-#
+
+#agents.lugl.LUGLNeuralNetwork
+

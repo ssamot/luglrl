@@ -43,15 +43,15 @@ def create_nn(input_shape, num_forms=2):
 
     distanceModel = Model(inputs=[input] + all_inputs,
                           outputs=[distance])
-    x = keras.layers.concatenate([distance, input])
+    x = keras.layers.concatenate([distance])
     x = keras.layers.Dense(1)(x)
     #x = keras.layers.Dense(1)(distance)
 
     model = Model(inputs=[input] + all_inputs, outputs=[x])
 
     model.compile(loss=keras.losses.mean_squared_error,
-                  optimizer=keras.optimizers.SGD(lr=0.1, momentum =0.9, nesterov = True),
-                  #optimizer=keras.optimizers.Adam(lr=0.1),
+                  #optimizer=keras.optimizers.SGD(lr=0.01, momentum =0.9, nesterov = True),
+                  optimizer=keras.optimizers.Adam(lr=0.0001),
 
                   metrics=['mse'])
 
@@ -76,9 +76,9 @@ if __name__ == '__main__':
     model, distanceModel, forms = create_nn(2, num_forms=num_forms)
     print(x.shape, y.shape)
     # model.fit([x] + [ones]*num_forms, y, epochs = 10000)
-    epochs = 500
+    epochs = 50000
     one = np.ones(shape=x.shape)
-    n_strength = 0.01
+    #n_strength = 0.01
 
     # reps = 10000
     # x_rep = np.repeat(x, reps, axis=0)

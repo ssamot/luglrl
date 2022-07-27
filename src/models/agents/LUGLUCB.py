@@ -56,7 +56,7 @@ def one():
 
 
 
-class LSPI_UCBLearner(rl_agent.AbstractAgent):
+class LUGLLightGBM(rl_agent.AbstractAgent):
     """Tabular Q-Learning agent.
 
     See open_spiel/python/examples/tic_tac_toe_qlearner.py for an usage example.
@@ -64,6 +64,7 @@ class LSPI_UCBLearner(rl_agent.AbstractAgent):
 
     def __init__(self,
                  player_id,
+                 state_representation_size,  ## ignored
                  num_actions,
                  discount_factor=1.0,
                  centralized=False,
@@ -81,21 +82,25 @@ class LSPI_UCBLearner(rl_agent.AbstractAgent):
         self._n_games = 0
         self.episode_length = 0
         self.model = None
-        self.states_visited = []
+
         self.episode_length_mean = 0
 
     def __getstate__(self):
         state = dict(self.__dict__)
         del state['_q_values']
+        del state['states_visited']
+        del state['_visits']
         return state
 
     def __setstate__(self, state):
         self.__dict__ = state
         self._reset_dict()
 
+
     def _reset_dict(self):
         self._q_values = keydefaultdict(self._default_value)
         self._visits = collections.defaultdict(one)
+        self.states_visited = []
 
     def _default_value(self, key):
         if(self.model is None):
@@ -107,11 +112,11 @@ class LSPI_UCBLearner(rl_agent.AbstractAgent):
                 action_features[action] = 1
             total_features = state_features + action_features
             phi = np.array(total_features)[np.newaxis,:]
-            value = self.model(phi)
+            value = self.model.predict(phi)
             #print(value)
 
             #print(value)
-            return value[0][0]
+            return value[0]
 
     def get_state(self, info_state, action):
         return tuple(info_state), tuple([action])
@@ -129,6 +134,9 @@ class LSPI_UCBLearner(rl_agent.AbstractAgent):
         # else:
         all_Qs = [self._q_values[self.get_state(info_state, action)] for action
                       in legal_actions]
+        all_Qs = np.array(all_Qs)
+        # break ties!
+        all_Qs+= (np.random.random(size = all_Qs.shape) * 0.00000001)
 
         if(is_evaluation):
             best_legal_action = np.argmax(np.array(all_Qs))
@@ -195,45 +203,128 @@ class LSPI_UCBLearner(rl_agent.AbstractAgent):
     def loss(self):
         return self._last_loss_value
 
+
+
+
+
+class LUGLUCBDecisionTree(LUGLLightGBM):
+
+    def _default_value(self, key):
+        if (self.model is None):
+            return 0.0
+        else:
+            state_features, action = list(key[0]), key[1][0]
+            #print(action, "action")
+            phi = np.array(state_features)[np.newaxis, :]
+            if(self.model[action] is None):
+                return 0.0
+            else:
+                value = self.model[action].predict(phi)
+                return value[0]
+
+    def train_supervised(self):
+
+        print("About to start training")
+
+        print(len(self._q_values))
+
+        #q_values = self.replay()
+        q_values = self._q_values
+
+        data_per_action = [[] for _ in range(self._num_actions)]
+        Qs_per_action = [[] for _ in range(self._num_actions)]
+
+        for key, q_value in q_values.items():
+            if(q_value!=0):
+                state_features, action = list(
+                    key[0]), key[1][0]
+
+                data_per_action[action].append(state_features)
+                Qs_per_action[action].append(q_value)
+
+
+
+        self.model = []
+        total = 0
+        for action in range(len(data_per_action)):
+            X = np.array(data_per_action[action])
+            y = np.array(Qs_per_action[action])
+            total +=X.shape[0]
+            print(X.shape, y.shape)
+            if(X.shape[0] > 10):
+                from sklearn.model_selection import train_test_split
+                # X_train, X_test, y_train, y_test = train_test_split(X, y,
+                #                                                     random_state=0)
+
+                from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
+                from sklearn.metrics import mean_squared_error
+                #model = linear_model.LinearRegression()
+                from sklearn.model_selection import GridSearchCV
+
+
+                clf = DecisionTreeRegressor(max_depth=3)
+                clf.fit(X, y)
+                model = clf
+
+
+                mse = metrics.mean_squared_error(y, model.predict(X))
+                r2 = metrics.explained_variance_score(y, model.predict(X))
+                print(mse, r2)
+                self.model.append(model)
+            else:
+                self.model.append(None)
+
+
+        print("Total", total)
+
+
+
+
+
+class LUGLUCBLightGBM(LUGLLightGBM):
+
+    def get_phi(self, key):
+        state_features, action = list(key[0]), list(key[1])
+        total_features = state_features + action
+        phi = np.array(total_features)
+        return phi
+
+    def _default_value(self, key):
+        if (self.model is None):
+
+            return 0.0
+        else:
+            state_features, action = list(key[0]), list(key[1])
+            total_features = state_features + action
+            phi = np.array(total_features)[np.newaxis, :]
+            value = self.model.predict(phi)
+
+            return value[0]
+
     def train_supervised(self):
 
         print("About to start training")
         all_features = []
         all_Qs = []
-        for key, q_value in self._q_values.items():
 
+        # q_values = self.replay()
+        q_values = self._q_values
+
+        for key, q_value in q_values.items():
+            if (q_value != 0):
                 state_features, action = list(
                     key[0]), key[1]
 
-                # action_features = list(
-                #     np.zeros(shape=self._num_actions))
-                # action_features[action[0]] = 1
                 total_features = state_features + list(action)
                 all_Qs.append(q_value)
                 all_features.append(total_features)
 
-            # print(len(state_features), len(action_features), len(total_features))
         X = np.array(all_features)
         y = np.array(all_Qs)
-        from sklearn.kernel_ridge import KernelRidge
-        print(X.shape, y.shape)
-        clf = LGBMRegressor()
-        # clf = ExtraTreesRegressor(max_depth=10)
 
-        # encoder = category_encoders.TargetEncoder(cols = range(X.shape[1]))
-        # encoder.fit(X,y)
-        # X_enc = encoder.transform(X)
-        # #print(X_enc)
-        # #exit()
-        #
-        # pipeline = [("features", StandardScaler()),
-        #                     ('clf', SGDRegressor())]
-        #
-        # clf = GridSearchCV(DecisionTreeRegressor(),
-        #                    param_grid={
-        #                        "min_weight_fraction_leaf": [1 / (2 ** 3.5)]},
-        #                    n_jobs=-1, cv=10, scoring="neg_mean_squared_error")
-        # print(X.shape, y.shape)
+        print(X.shape, y.shape)
+        from lightgbm.sklearn import LGBMRegressor
+        clf = LGBMRegressor(n_jobs=6, n_estimators=1000)
         clf.fit(X, y, categorical_feature=range(X.shape[1]))
         self.model = clf
         mse = metrics.mean_squared_error(y, self.model.predict(X))

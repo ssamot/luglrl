@@ -29,9 +29,7 @@ from sklearn import linear_model
 from copy import deepcopy
 
 
-
-
-def replay(buffer,discount_factor, q_values, step_size):
+def replay(buffer, discount_factor, q_values, step_size):
     mean_loss = []
     for elements in buffer:
         all_targets = []
@@ -53,11 +51,11 @@ def replay(buffer,discount_factor, q_values, step_size):
     print("Replay loss", np.mean(mean_loss))
 
 
-def init_replay(buffer,discount_factor, q_values, step_size):
+def init_replay(buffer, discount_factor, q_values, step_size):
     mean_loss = []
     for prev in buffer.keys():
         all_targets = []
-        for state_actions, r, t  in buffer[prev]:
+        for state_actions, r, t in buffer[prev]:
             target = r
             if not t:  # Q values are zero for terminal.
                 target += discount_factor * np.max(
@@ -65,7 +63,7 @@ def init_replay(buffer,discount_factor, q_values, step_size):
                      in state_actions])
             all_targets.append(target)
         target = np.mean(all_targets)
-        #print(len(all_targets))
+        # print(len(all_targets))
         prev_q_value = q_values[prev]
         loss = target - prev_q_value
         # print(loss)
@@ -74,10 +72,11 @@ def init_replay(buffer,discount_factor, q_values, step_size):
 
     return np.mean(mean_loss)
 
+
 class keydefaultdict(collections.defaultdict):
     def __missing__(self, key):
         if self.default_factory is None:
-            raise KeyError( key )
+            raise KeyError(key)
         else:
             ret = self[key] = self.default_factory(key)
             return ret
@@ -130,7 +129,7 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         self._buffer = {}
 
     def _default_value(self, key):
-        if(self.model is None):
+        if (self.model is None):
 
             return 0.0
         else:
@@ -139,7 +138,7 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
             if (action is not None):
                 action_features[action] = 1
             total_features = state_features + action_features
-            phi = np.array(total_features)[np.newaxis,:]
+            phi = np.array(total_features)[np.newaxis, :]
             value = self.model(phi)
 
             return value[0][0]
@@ -159,8 +158,6 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
     #     #exit()
     #     return cloned_q
 
-
-
     def _epsilon_greedy(self, info_state, legal_actions, epsilon):
         """Returns a valid epsilon-greedy action and valid action probs.
 
@@ -178,13 +175,15 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         # q_values[info_state][a]  transformed to q_values[tuple(info_state) + tuple(a)]
         probs = np.zeros(self._num_actions)
 
-        q_values = [self._q_values[self.get_state_action(info_state,a)] + np.random.random()*0.0001 for a in legal_actions]
+        q_values = [self._q_values[self.get_state_action(info_state,
+                                                         a)] + np.random.random() * 0.0001
+                    for a in legal_actions]
         greedy_q = np.argmax(q_values)
-        #print(q_values)
+        # print(q_values)
 
         probs[legal_actions] = epsilon / len(legal_actions)
-        probs[legal_actions[greedy_q]] +=(1 - epsilon)
-        #print(probs, np.sum(probs))
+        probs[legal_actions[greedy_q]] += (1 - epsilon)
+        # print(probs, np.sum(probs))
         action = np.random.choice(range(self._num_actions), p=probs)
         return action, probs
 
@@ -213,24 +212,27 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
             epsilon = 0.0 if is_evaluation else self._epsilon
             action, probs = self._epsilon_greedy(
                 info_state, legal_actions, epsilon=epsilon)
-        #print(time_step.rewards, time_step.last())
+        # print(time_step.rewards, time_step.last())
         # Learn step: don't learn during evaluation or at first agent steps.
         if self._prev_info_state and not is_evaluation:
-            #print("training")
+            # print("training")
             target = time_step.rewards[self._player_id]
-            state_actions = [self.get_state_action(info_state,a) for a in legal_actions]
+            state_actions = [self.get_state_action(info_state, a) for a in
+                             legal_actions]
             if not time_step.last():  # Q values are zero for terminal.
                 target += self._discount_factor * max(
-                    [self._q_values[state_action] for state_action in state_actions])
-            #print(target)
-            prev = self.get_state_action(self._prev_info_state,self._prev_action)
+                    [self._q_values[state_action] for state_action in
+                     state_actions])
+            # print(target)
+            prev = self.get_state_action(self._prev_info_state,
+                                         self._prev_action)
             prev_q_value = self._q_values[prev]
             self._last_loss_value = target - prev_q_value
-            #print(target, prev_q_value)
+            # print(target, prev_q_value)
             self._q_values[prev] += (
                     self._step_size * self._last_loss_value)
 
-            if(prev not in self._buffer):
+            if (prev not in self._buffer):
                 self._buffer[prev] = []
 
             self._buffer[prev].append([
@@ -239,20 +241,16 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
                 time_step.last()
             ])
 
-
-
-
             self._epsilon = self._epsilon_schedule.step()
-            self.episode_length+=1
+            self.episode_length += 1
             if time_step.last():  # prepare for the next episode.
                 self._prev_info_state = None
-                self._n_games +=1
-                #print(self.episode_length)
+                self._n_games += 1
+                # print(self.episode_length)
                 self.episode_length = 0
-                #print(time_step.rewards, "rewards")
-                #exit()
+                # print(time_step.rewards, "rewards")
+                # exit()
                 return
-
 
         # Don't mess up with the state during evaluation.
         if not is_evaluation:
@@ -263,7 +261,6 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
     @property
     def loss(self):
         return self._last_loss_value
-
 
     def build_model(self, y_axis):
 
@@ -299,7 +296,7 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
                     key[0]), key[1]
 
                 action_features = list(
-                     np.zeros(shape=self._num_actions))
+                    np.zeros(shape=self._num_actions))
                 action_features[action[0]] = 1
                 total_features = state_features + action_features
                 all_Qs.append(q_value)
@@ -318,8 +315,8 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         print(X.shape, y.shape)
         import keras
         callback = keras.callbacks.EarlyStopping(monitor='loss',
-                                                    patience=10)
-        self.model.fit(X, y, epochs=10000, verbose=False, callbacks = [callback])
+                                                 patience=10)
+        self.model.fit(X, y, epochs=10000, verbose=False, callbacks=[callback])
         mse = metrics.mean_squared_error(y, self.model.predict(X,
                                                                verbose=False))
         r2 = metrics.explained_variance_score(y, self.model.predict(X,
@@ -328,10 +325,9 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         print(mse, r2)
 
 
-
 class LUGLLightGBM(LUGLNeuralNetwork):
 
-    def get_phi(self,  key):
+    def get_phi(self, key):
         state_features, action = list(key[0]), list(key[1])
         total_features = state_features + action
         phi = np.array(total_features)
@@ -355,12 +351,11 @@ class LUGLLightGBM(LUGLNeuralNetwork):
         all_features = []
         all_Qs = []
 
-
-        #q_values = self.replay()
+        # q_values = self.replay()
         q_values = self._q_values
 
         for key, q_value in q_values.items():
-            if(q_value!=0):
+            if (q_value != 0):
                 state_features, action = list(
                     key[0]), key[1]
 
@@ -374,7 +369,7 @@ class LUGLLightGBM(LUGLNeuralNetwork):
         print(X.shape, y.shape)
         from lightgbm.sklearn import LGBMRegressor
         clf = LGBMRegressor(n_jobs=6, n_estimators=1000)
-        clf.fit(X,y, categorical_feature = range(X.shape[1]))
+        clf.fit(X, y, categorical_feature=range(X.shape[1]))
         self.model = clf
         mse = metrics.mean_squared_error(y, self.model.predict(X))
         r2 = metrics.explained_variance_score(y, self.model.predict(X))
@@ -382,19 +377,16 @@ class LUGLLightGBM(LUGLNeuralNetwork):
         print(mse, r2)
 
 
-
-
-
-class LUGLDecisionTree(LUGLNeuralNetwork):
+class LUGLDecisionTreeCV(LUGLNeuralNetwork):
 
     def _default_value(self, key):
         if (self.model is None):
             return 0.0
         else:
             state_features, action = list(key[0]), key[1][0]
-            #print(action, "action")
+            # print(action, "action")
             phi = np.array(state_features)[np.newaxis, :]
-            if(self.model[action] is None):
+            if (self.model[action] is None):
                 return 0.0
             else:
                 value = self.model[action].predict(phi)
@@ -406,51 +398,47 @@ class LUGLDecisionTree(LUGLNeuralNetwork):
 
         print(len(self._q_values))
 
-        #q_values = self.replay()
+        # q_values = self.replay()
         q_values = self._q_values
 
         data_per_action = [[] for _ in range(self._num_actions)]
         Qs_per_action = [[] for _ in range(self._num_actions)]
 
         for key, q_value in q_values.items():
-            if(q_value!=0):
+            if (q_value != 0):
                 state_features, action = list(
                     key[0]), key[1][0]
 
                 data_per_action[action].append(state_features)
                 Qs_per_action[action].append(q_value)
 
-
-
         self.model = []
         total = 0
         for action in range(len(data_per_action)):
             X = np.array(data_per_action[action])
             y = np.array(Qs_per_action[action])
-            total +=X.shape[0]
+            total += X.shape[0]
             print(X.shape, y.shape)
-            if(X.shape[0] > 10):
+            if (X.shape[0] > 10):
                 from sklearn.model_selection import train_test_split
                 # X_train, X_test, y_train, y_test = train_test_split(X, y,
                 #                                                     random_state=0)
 
-                from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
+                from sklearn.tree import DecisionTreeRegressor, \
+                    DecisionTreeClassifier
                 from sklearn.metrics import mean_squared_error
-                #model = linear_model.LinearRegression()
+                dt = DecisionTreeRegressor()
                 from sklearn.model_selection import GridSearchCV
+                # path = dt.cost_complexity_pruning_path(X, y)
+                params = {"max_depth": list(np.arange(2, 7) ** 2)}
+                print(params)
+                clf = GridSearchCV(dt, param_grid=params,
+                                   scoring="neg_mean_squared_error",
+                                   n_jobs=-1, cv=10)
 
-                # model = GridSearchCV(DecisionTreeRegressor(),
-                #                    param_grid={
-                #                        "max_depth": params },
-                #                    n_jobs=-1, cv=10,
-                #                    scoring="neg_mean_squared_error")
-
-                from sklearn.pipeline import Pipeline
-                from sklearn import random_projection
-                from sklearn.manifold import LocallyLinearEmbedding
-                clf = DecisionTreeRegressor(min_samples_leaf=3)
-                model = clf
-                model.fit(X,y)
+                clf.fit(X, y)
+                print("best", clf.best_params_)
+                model = clf.best_estimator_
 
                 mse = metrics.mean_squared_error(y, model.predict(X))
                 r2 = metrics.explained_variance_score(y, model.predict(X))
@@ -459,9 +447,59 @@ class LUGLDecisionTree(LUGLNeuralNetwork):
             else:
                 self.model.append(None)
 
-
         print("Total", total)
 
+
+class LUGLDecisionTree(LUGLDecisionTreeCV):
+
+    def train_supervised(self):
+
+        print("About to start training")
+
+        print(len(self._q_values))
+
+        # q_values = self.replay()
+        q_values = self._q_values
+
+        data_per_action = [[] for _ in range(self._num_actions)]
+        Qs_per_action = [[] for _ in range(self._num_actions)]
+
+        for key, q_value in q_values.items():
+            if (q_value != 0):
+                state_features, action = list(
+                    key[0]), key[1][0]
+
+                data_per_action[action].append(state_features)
+                Qs_per_action[action].append(q_value)
+
+        self.model = []
+        total = 0
+        for action in range(len(data_per_action)):
+            X = np.array(data_per_action[action])
+            y = np.array(Qs_per_action[action])
+            total += X.shape[0]
+            print(X.shape, y.shape)
+            if (X.shape[0] > 10):
+                from sklearn.model_selection import train_test_split
+                # X_train, X_test, y_train, y_test = train_test_split(X, y,
+                #                                                     random_state=0)
+
+                from sklearn.tree import DecisionTreeRegressor, \
+                    DecisionTreeClassifier
+                from sklearn.metrics import mean_squared_error
+                clf = DecisionTreeRegressor(max_depth=3)
+
+                clf.fit(X, y)
+                model = clf
+
+                mse = metrics.mean_squared_error(y, model.predict(X))
+                r2 = metrics.explained_variance_score(y, model.predict(X))
+                print(mse, r2)
+                self.model.append(model)
+            else:
+                self.model.append(None)
+
+        print("Total", total)
 
 
 class LUGLLinear(LUGLNeuralNetwork):
@@ -470,71 +508,90 @@ class LUGLLinear(LUGLNeuralNetwork):
         return (y + 1) / 2
 
     def inverse_transform(self, y):
-        return np.clip(y,-1, 1)
-        #return (y * 2) - 1
+        return np.clip(y, -1, 1)
+        # return (y * 2) - 1
 
     def _default_value(self, key):
         if (self.model is None):
             return 0.0
         else:
             state_features, action = list(key[0]), key[1][0]
-            #print(action, "action")
+            # print(action, "action")
             phi = np.array(state_features)[np.newaxis, :]
-            if(self.model[action] is None):
+            if (self.model[action] is None):
                 return 0.0
             else:
                 value = self.model[action].predict(phi)
+
+                #value = self.model[action].bin.inverse_transform(value[:, np.newaxis])
+
                 return self.inverse_transform(value[0])
 
     def train_supervised(self):
 
         print("About to start training")
 
-        #q_values = self.replay()
+        # q_values = self.replay()
         q_values = self._q_values
 
         data_per_action = [[] for _ in range(self._num_actions)]
         Qs_per_action = [[] for _ in range(self._num_actions)]
         print(len(self._q_values), "Qvals")
         for key, q_value in q_values.items():
-            if(q_value!=0):
+            if (q_value != 0):
                 state_features, action = list(
                     key[0]), key[1][0]
 
                 data_per_action[action].append(state_features)
                 Qs_per_action[action].append(q_value)
 
-
-
         self.model = []
         total = 0
         for action in range(len(data_per_action)):
             X = np.array(data_per_action[action])
             y = np.array(Qs_per_action[action])
-            total +=X.shape[0]
+            total += X.shape[0]
             print(X.shape, y.shape)
-            if(X.shape[0] > 10):
+            self.bin = []
+            if (X.shape[0] > 10):
 
-
-                #from lightgbm.sklearn import LGBMRegressor
-                #model = LGBMRegressor(n_jobs=6, n_estimators=100)
+                # from lightgbm.sklearn import LGBMRegressor
+                # model = LGBMRegressor(n_jobs=6, n_estimators=100)
                 from sklearn.preprocessing import StandardScaler
                 from sklearn.pipeline import Pipeline
 
                 from sklearn.pipeline import Pipeline
                 from sklearn import random_projection
                 clf = linear_model.LinearRegression()
-                from sklearn.kernel_approximation import RBFSampler
+                #from sklearn.kernel_approximation import RBFSampler
                 from sklearn.kernel_approximation import PolynomialCountSketch
+                from sklearn.neighbors import KNeighborsTransformer, NeighborhoodComponentsAnalysis
+                from sklearn.decomposition import PCA
+                from sklearn.discriminant_analysis import \
+                    LinearDiscriminantAnalysis
+                from sklearn.preprocessing import KBinsDiscretizer
 
-                model = Pipeline([('projection',PolynomialCountSketch()), ('clf', clf)])
+                #bin = KBinsDiscretizer(encode="ordinal", n_bins=20)
 
-                #model = clf
-                #y = self.transform(y)
-                #print(y.max(), y.min())
+                #bin.fit(y[:, np.newaxis])
+                #y = bin.transform(y[:, np.newaxis]).T[0]
+                #n_classes = bin.n_bins_[0]
+                #print(X.shape, y.shape, bin.n_bins_)
+                #transf = NeighborhoodComponentsAnalysis(
+                #    n_components=10,)
+                #transf = RBFSampler()
+                transf = PolynomialCountSketch()
+                #transf = NeighborhoodComponentsAnalysis(n_components=10)
+               # exit()
+                model = Pipeline([('projection',transf) , ('clf', clf)])
 
-                model.fit(X,y)
-                #print(model.best_params_)
+                # model = clf
+                # y = self.transform(y)
+                # print(y.max(), y.min())
+
+                model.fit(X, y)
+                #model.bin = bin
+                # print(model.best_params_)
 
                 mse = metrics.mean_squared_error(y, model.predict(X))
                 r2 = metrics.explained_variance_score(y, model.predict(X))
@@ -546,7 +603,6 @@ class LUGLLinear(LUGLNeuralNetwork):
         print("Total", total)
 
 
-
 class LUGLRandomForest(LUGLNeuralNetwork):
 
     def _default_value(self, key):
@@ -554,12 +610,12 @@ class LUGLRandomForest(LUGLNeuralNetwork):
             return 0.0
         else:
             state_features, action = list(key[0]), key[1][0]
-            #print(action, "action")
+            # print(action, "action")
             phi = np.array(state_features)[np.newaxis, :]
-            if(self.model[action] is None):
+            if (self.model[action] is None):
                 return 0.0
             else:
-                #r = np.random.randint(0, self.model[action].n_estimators)
+                # r = np.random.randint(0, self.model[action].n_estimators)
                 value = self.model[action].predict(phi)
                 return value[0]
 
@@ -569,37 +625,36 @@ class LUGLRandomForest(LUGLNeuralNetwork):
 
         print(len(self._q_values))
 
-        #q_values = self.replay()
+        # q_values = self.replay()
         q_values = self._q_values
 
         data_per_action = [[] for _ in range(self._num_actions)]
         Qs_per_action = [[] for _ in range(self._num_actions)]
 
         for key, q_value in q_values.items():
-            if(q_value!=0):
+            if (q_value != 0):
                 state_features, action = list(
                     key[0]), key[1][0]
 
                 data_per_action[action].append(state_features)
                 Qs_per_action[action].append(q_value)
 
-
-
         self.model = []
         total = 0
         for action in range(len(data_per_action)):
             X = np.array(data_per_action[action])
             y = np.array(Qs_per_action[action])
-            total +=X.shape[0]
+            total += X.shape[0]
             print(X.shape, y.shape)
-            if(X.shape[0] > 10):
+            if (X.shape[0] > 10):
                 from sklearn.model_selection import train_test_split
                 # X_train, X_test, y_train, y_test = train_test_split(X, y,
                 #                                                     random_state=0)
 
-                from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
+                from sklearn.tree import DecisionTreeRegressor, \
+                    DecisionTreeClassifier
                 from sklearn.metrics import mean_squared_error
-                #model = linear_model.LinearRegression()
+                # model = linear_model.LinearRegression()
                 from sklearn.model_selection import GridSearchCV
 
                 # model = GridSearchCV(DecisionTreeRegressor(),
@@ -612,25 +667,25 @@ class LUGLRandomForest(LUGLNeuralNetwork):
                 from sklearn.manifold import LocallyLinearEmbedding
                 from sklearn.tree import DecisionTreeRegressor
                 from sklearn.kernel_approximation import RBFSampler
-                #clf = ExtraTreesRegressor(min_samples_leaf=3, bootstrap=True, n_jobs=20)
+                # clf = ExtraTreesRegressor(min_samples_leaf=3, bootstrap=True, n_jobs=20)
 
                 from lightgbm.sklearn import LGBMRegressor
                 from sklearn.pipeline import Pipeline
-                #clf = LGBMRegressor(n_jobs=12, n_estimators=100,boosting_type="rf",bagging_freq = 1, bagging_fraction = 0.7)
+                # clf = LGBMRegressor(n_jobs=12, n_estimators=100,boosting_type="rf",bagging_freq = 1, bagging_fraction = 0.7)
 
-
-                model = ExtraTreesRegressor( bootstrap=True, n_jobs=20, n_estimators=1000)
+                model = ExtraTreesRegressor(bootstrap=True, n_jobs=20,
+                                            n_estimators=1000)
                 pipe = Pipeline([('scaler', RBFSampler()), ('svc', model)])
 
-                pipe.fit(X,y)
+                pipe.fit(X, y)
                 y_hat = pipe.predict(X)
 
                 model = DecisionTreeRegressor()
                 pipe = Pipeline(
                     [('scaler', RBFSampler()), ('svc', model)])
                 pipe = model
-                model.fit(X,y_hat)
-                print("Max depth", model.tree_.max_depth,)
+                model.fit(X, y_hat)
+                print("Max depth", model.tree_.max_depth, )
 
                 mse = metrics.mean_squared_error(y, model.predict(X))
                 r2 = metrics.explained_variance_score(y, model.predict(X))
@@ -639,5 +694,157 @@ class LUGLRandomForest(LUGLNeuralNetwork):
             else:
                 self.model.append(None)
 
+        print("Total", total)
 
+
+from scipy.spatial.distance import cdist
+
+
+class LUGLLinearTemplate(LUGLNeuralNetwork):
+
+
+    def transform(self, y):
+        return (y + 1) / 2
+
+    def inverse_transform(self, y):
+        return np.clip(y, -1, 1)
+        # return (y * 2) - 1
+
+    def _default_value(self, key):
+        if (self.model is None):
+            return 0.0
+        else:
+            state_features, action = list(key[0]), key[1][0]
+            # print(action, "action")
+            phi = np.array(state_features)[np.newaxis, :]
+            if (self.model[action] is None):
+                return 0.0
+            else:
+
+                X_dst = cdist(phi, self.model[action].latest_best)
+
+                max_column = X_dst.max(axis=-1)[:, np.newaxis]
+                min_column = X_dst.min(axis=-1)[:, np.newaxis]
+
+                # print(max_column.shape, min_column.shape)
+                # exit()
+                X_dst = np.concatenate(
+                    [X_dst, max_column, min_column],
+                    axis=-1)
+
+
+                value = self.model[action].predict(X_dst)
+
+                #value = self.model[action].bin.inverse_transform(value[:, np.newaxis])
+
+                return self.inverse_transform(value[0])
+
+    def train_supervised(self):
+
+        print("About to start training")
+
+        # q_values = self.replay()
+        q_values = self._q_values
+
+        data_per_action = [[] for _ in range(self._num_actions)]
+        Qs_per_action = [[] for _ in range(self._num_actions)]
+        print(len(self._q_values), "Qvals")
+        for key, q_value in q_values.items():
+            if (q_value != 0):
+                state_features, action = list(
+                    key[0]), key[1][0]
+
+                data_per_action[action].append(state_features)
+                Qs_per_action[action].append(q_value)
+
+        self.model = []
+        total = 0
+        for action in range(len(data_per_action)):
+            X = np.array(data_per_action[action])
+            y = np.array(Qs_per_action[action])
+            total += X.shape[0]
+            print(X.shape, y.shape)
+            self.bin = []
+            if (X.shape[0] > 10):
+
+                # from lightgbm.sklearn import LGBMRegressor
+                # model = LGBMRegressor(n_jobs=6, n_estimators=100)
+                from sklearn.preprocessing import StandardScaler
+                from sklearn.pipeline import Pipeline
+
+                from sklearn.pipeline import Pipeline
+                from sklearn import random_projection
+                clf = linear_model.LinearRegression()
+                from sklearn.tree import DecisionTreeRegressor
+                #model = DecisionTreeRegressor(max_depth=3)
+                model = clf
+
+                maximum_distances = 10
+                n_samples = 500
+
+                best = [[] for _ in range(maximum_distances)]
+                best_score = [[-10000] for _ in range(maximum_distances)]
+
+                r = np.array(list(range(0, len(X))))
+
+                for dist in range(maximum_distances-1, maximum_distances):
+                    for _ in range(n_samples):
+                        n_distances = dist
+                        if (n_distances > len(X)):
+                            break
+                        sampled_dst = np.random.choice(r, size=n_distances,
+                                                   replace=False)
+                        limit = 3000
+                        if(len(X) > limit):
+                            subsampled = np.random.choice(r, size=limit,
+                                                       replace=False)
+                        else:
+                            subsampled = r
+                        X_dst = cdist(X[subsampled], X[sampled_dst])
+                        clf = linear_model.LinearRegression()
+                        max_column = X_dst.max(axis = -1)[:, np.newaxis]
+                        min_column = X_dst.min(axis = -1)[:, np.newaxis]
+                        #max_column_a = np.argmax(X_dst, axis=-1)[:, np.newaxis]
+                        #min_column_a = np.argmin(X_dst, axis=-1)[:, np.newaxis]
+
+                        #print(max_column.shape, min_column.shape)
+                        #exit()
+                        X_dst = np.concatenate([X_dst, max_column, min_column], axis = -1)
+                        #X_dst = np.concatenate([X, X_dst], axis = -1)
+                        #print(X_dst.shape, X.shape)
+                        clf.fit(X_dst, y[subsampled])
+                        score = clf.score(X_dst, y[subsampled])
+                        if (score > best_score[n_distances]):
+                            best_score[n_distances] = score
+                            best[n_distances] = sampled_dst
+
+                print(best_score)
+                print(best)
+
+                latest_best = best[-1]
+                #exit()
+                X_dst = cdist(X, X[latest_best])
+                max_column = X_dst.max(axis=-1)[:, np.newaxis]
+                min_column = X_dst.min(axis=-1)[:, np.newaxis]
+                #max_column_a = np.argmax(X_dst, axis=-1)[:, np.newaxis]
+                #min_column_a = np.argmin(X_dst, axis=-1)[:, np.newaxis]
+
+                # print(max_column.shape, min_column.shape)
+                # exit()
+                X_dst = np.concatenate(
+                    [X_dst, max_column, min_column],
+                    axis=-1)
+
+                model.fit(X_dst, y)
+                model.latest_best = X[latest_best]
+                #model.bin = bin
+                # print(model.best_params_)
+
+                mse = metrics.mean_squared_error(y, model.predict(X_dst))
+                r2 = metrics.explained_variance_score(y, model.predict(X_dst))
+                self.model.append(model)
+            else:
+                self.model.append(None)
+
+            print(mse, r2)
         print("Total", total)
