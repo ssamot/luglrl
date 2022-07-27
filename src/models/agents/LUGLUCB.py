@@ -235,12 +235,11 @@ class LUGLUCBDecisionTree(LUGLLightGBM):
         Qs_per_action = [[] for _ in range(self._num_actions)]
 
         for key, q_value in q_values.items():
-            if(q_value!=0):
-                state_features, action = list(
-                    key[0]), key[1][0]
+            state_features, action = list(
+                key[0]), key[1][0]
 
-                data_per_action[action].append(state_features)
-                Qs_per_action[action].append(q_value)
+            data_per_action[action].append(state_features)
+            Qs_per_action[action].append(q_value)
 
 
 
@@ -311,13 +310,13 @@ class LUGLUCBLightGBM(LUGLLightGBM):
         q_values = self._q_values
 
         for key, q_value in q_values.items():
-            if (q_value != 0):
-                state_features, action = list(
-                    key[0]), key[1]
+            state_features, action = list(
+                key[0]), key[1]
 
-                total_features = state_features + list(action)
-                all_Qs.append(q_value)
-                all_features.append(total_features)
+            total_features = state_features + list(action)
+            all_Qs.append(q_value)
+            all_features.append(total_features)
+
 
         X = np.array(all_features)
         y = np.array(all_Qs)

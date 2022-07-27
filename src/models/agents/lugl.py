@@ -291,16 +291,15 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         all_Qs = []
 
         for key, q_value in self._q_values.items():
-            if (q_value != 0):
-                state_features, action = list(
-                    key[0]), key[1]
+            state_features, action = list(
+                key[0]), key[1]
 
-                action_features = list(
-                    np.zeros(shape=self._num_actions))
-                action_features[action[0]] = 1
-                total_features = state_features + action_features
-                all_Qs.append(q_value)
-                all_features.append(total_features)
+            action_features = list(
+                np.zeros(shape=self._num_actions))
+            action_features[action[0]] = 1
+            total_features = state_features + action_features
+            all_Qs.append(q_value)
+            all_features.append(total_features)
 
             # print(len(state_features), len(action_features), len(total_features))
         X = np.array(all_features)
@@ -355,13 +354,12 @@ class LUGLLightGBM(LUGLNeuralNetwork):
         q_values = self._q_values
 
         for key, q_value in q_values.items():
-            if (q_value != 0):
-                state_features, action = list(
-                    key[0]), key[1]
+            state_features, action = list(
+                key[0]), key[1]
 
-                total_features = state_features + list(action)
-                all_Qs.append(q_value)
-                all_features.append(total_features)
+            total_features = state_features + list(action)
+            all_Qs.append(q_value)
+            all_features.append(total_features)
 
         X = np.array(all_features)
         y = np.array(all_Qs)
@@ -405,12 +403,12 @@ class LUGLDecisionTreeCV(LUGLNeuralNetwork):
         Qs_per_action = [[] for _ in range(self._num_actions)]
 
         for key, q_value in q_values.items():
-            if (q_value != 0):
-                state_features, action = list(
-                    key[0]), key[1][0]
 
-                data_per_action[action].append(state_features)
-                Qs_per_action[action].append(q_value)
+            state_features, action = list(
+                key[0]), key[1][0]
+
+            data_per_action[action].append(state_features)
+            Qs_per_action[action].append(q_value)
 
         self.model = []
         total = 0
@@ -465,12 +463,12 @@ class LUGLDecisionTree(LUGLDecisionTreeCV):
         Qs_per_action = [[] for _ in range(self._num_actions)]
 
         for key, q_value in q_values.items():
-            if (q_value != 0):
-                state_features, action = list(
-                    key[0]), key[1][0]
 
-                data_per_action[action].append(state_features)
-                Qs_per_action[action].append(q_value)
+            state_features, action = list(
+                key[0]), key[1][0]
+
+            data_per_action[action].append(state_features)
+            Qs_per_action[action].append(q_value)
 
         self.model = []
         total = 0
@@ -538,12 +536,11 @@ class LUGLLinear(LUGLNeuralNetwork):
         Qs_per_action = [[] for _ in range(self._num_actions)]
         print(len(self._q_values), "Qvals")
         for key, q_value in q_values.items():
-            if (q_value != 0):
-                state_features, action = list(
-                    key[0]), key[1][0]
+            state_features, action = list(
+                key[0]), key[1][0]
 
-                data_per_action[action].append(state_features)
-                Qs_per_action[action].append(q_value)
+            data_per_action[action].append(state_features)
+            Qs_per_action[action].append(q_value)
 
         self.model = []
         total = 0
@@ -632,12 +629,11 @@ class LUGLRandomForest(LUGLNeuralNetwork):
         Qs_per_action = [[] for _ in range(self._num_actions)]
 
         for key, q_value in q_values.items():
-            if (q_value != 0):
-                state_features, action = list(
-                    key[0]), key[1][0]
+            state_features, action = list(
+                key[0]), key[1][0]
 
-                data_per_action[action].append(state_features)
-                Qs_per_action[action].append(q_value)
+            data_per_action[action].append(state_features)
+            Qs_per_action[action].append(q_value)
 
         self.model = []
         total = 0
@@ -750,12 +746,11 @@ class LUGLLinearTemplate(LUGLNeuralNetwork):
         Qs_per_action = [[] for _ in range(self._num_actions)]
         print(len(self._q_values), "Qvals")
         for key, q_value in q_values.items():
-            if (q_value != 0):
-                state_features, action = list(
-                    key[0]), key[1][0]
+            state_features, action = list(
+                key[0]), key[1][0]
 
-                data_per_action[action].append(state_features)
-                Qs_per_action[action].append(q_value)
+            data_per_action[action].append(state_features)
+            Qs_per_action[action].append(q_value)
 
         self.model = []
         total = 0
