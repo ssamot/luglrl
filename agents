@@ -1,9 +1,8 @@
-agents.LUGLUCB.LUGLUCBLightGBM
-agents.LUGLUCB.LUGLUCBDecisionTree
-agents.lugl.LUGLLinear
-agents.lugl.LUGLLightGBM
-agents.lugl.LUGLDecisionTree
-agents.dqn.DQN
-
 #agents.lugl.LUGLNeuralNetwork
+agents.lugl.LUGLDecisionTree
+agents.lugl.LUGLLightGBM
+agents.luglUCB.LUGLUCBLightGBM
+agents.luglUCB.LUGLUCBDecisionTree
+agents.lugl.LUGLLinear
+agents.dqn.DQN
 

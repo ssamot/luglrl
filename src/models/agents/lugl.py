@@ -146,17 +146,17 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
     def get_state_action(self, info_state, action):
         return (tuple(info_state), tuple([action]))
 
-    # def replay(self):
-    #     cloned_q = (self._q_values)
-    #     for _ in range(1):
-    #         loss = init_replay(self._buffer, self._discount_factor,
-    #                            cloned_q, self._step_size)
-    #         print("Replay loss", loss)
-    #         if(loss == 0.0):
-    #             break;
-    #     #print(cloned_q.values())
-    #     #exit()
-    #     return cloned_q
+    def replay(self):
+        cloned_q = deepcopy(self._q_values)
+        for _ in range(1):
+            loss = init_replay(self._buffer, self._discount_factor,
+                               cloned_q, self._step_size)
+            print("Replay loss", loss)
+            if(loss == 0.0):
+                break;
+        #print(cloned_q.values())
+        #exit()
+        return cloned_q
 
     def _epsilon_greedy(self, info_state, legal_actions, epsilon):
         """Returns a valid epsilon-greedy action and valid action probs.
@@ -229,6 +229,7 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
             prev_q_value = self._q_values[prev]
             self._last_loss_value = target - prev_q_value
             # print(target, prev_q_value)
+
             self._q_values[prev] += (
                     self._step_size * self._last_loss_value)
 
@@ -290,7 +291,9 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         all_features = []
         all_Qs = []
 
-        for key, q_value in self._q_values.items():
+        q_values = self.replay()
+
+        for key, q_value in q_values.items():
             state_features, action = list(
                 key[0]), key[1]
 
@@ -350,8 +353,8 @@ class LUGLLightGBM(LUGLNeuralNetwork):
         all_features = []
         all_Qs = []
 
-        # q_values = self.replay()
-        q_values = self._q_values
+        q_values = self.replay()
+        #q_values = self._q_values
 
         for key, q_value in q_values.items():
             state_features, action = list(
@@ -375,7 +378,9 @@ class LUGLLightGBM(LUGLNeuralNetwork):
         print(mse, r2)
 
 
-class LUGLDecisionTreeCV(LUGLNeuralNetwork):
+
+class LUGLDecisionTree(LUGLLightGBM):
+
 
     def _default_value(self, key):
         if (self.model is None):
@@ -396,8 +401,8 @@ class LUGLDecisionTreeCV(LUGLNeuralNetwork):
 
         print(len(self._q_values))
 
-        # q_values = self.replay()
-        q_values = self._q_values
+        q_values = self.replay()
+        #q_values = self._q_values
 
         data_per_action = [[] for _ in range(self._num_actions)]
         Qs_per_action = [[] for _ in range(self._num_actions)]
@@ -425,67 +430,7 @@ class LUGLDecisionTreeCV(LUGLNeuralNetwork):
                 from sklearn.tree import DecisionTreeRegressor, \
                     DecisionTreeClassifier
                 from sklearn.metrics import mean_squared_error
-                dt = DecisionTreeRegressor()
-                from sklearn.model_selection import GridSearchCV
-                # path = dt.cost_complexity_pruning_path(X, y)
-                params = {"max_depth": list(np.arange(2, 7) ** 2)}
-                print(params)
-                clf = GridSearchCV(dt, param_grid=params,
-                                   scoring="neg_mean_squared_error",
-                                   n_jobs=-1, cv=10)
-
-                clf.fit(X, y)
-                print("best", clf.best_params_)
-                model = clf.best_estimator_
-
-                mse = metrics.mean_squared_error(y, model.predict(X))
-                r2 = metrics.explained_variance_score(y, model.predict(X))
-                print(mse, r2)
-                self.model.append(model)
-            else:
-                self.model.append(None)
-
-        print("Total", total)
-
-
-class LUGLDecisionTree(LUGLDecisionTreeCV):
-
-    def train_supervised(self):
-
-        print("About to start training")
-
-        print(len(self._q_values))
-
-        # q_values = self.replay()
-        q_values = self._q_values
-
-        data_per_action = [[] for _ in range(self._num_actions)]
-        Qs_per_action = [[] for _ in range(self._num_actions)]
-
-        for key, q_value in q_values.items():
-
-            state_features, action = list(
-                key[0]), key[1][0]
-
-            data_per_action[action].append(state_features)
-            Qs_per_action[action].append(q_value)
-
-        self.model = []
-        total = 0
-        for action in range(len(data_per_action)):
-            X = np.array(data_per_action[action])
-            y = np.array(Qs_per_action[action])
-            total += X.shape[0]
-            print(X.shape, y.shape)
-            if (X.shape[0] > 10):
-                from sklearn.model_selection import train_test_split
-                # X_train, X_test, y_train, y_test = train_test_split(X, y,
-                #                                                     random_state=0)
-
-                from sklearn.tree import DecisionTreeRegressor, \
-                    DecisionTreeClassifier
-                from sklearn.metrics import mean_squared_error
-                clf = DecisionTreeRegressor(max_depth=3)
+                clf = DecisionTreeRegressor(min_samples_leaf=3)
 
                 clf.fit(X, y)
                 model = clf
@@ -529,8 +474,8 @@ class LUGLLinear(LUGLNeuralNetwork):
 
         print("About to start training")
 
-        # q_values = self.replay()
-        q_values = self._q_values
+        q_values = self.replay()
+        #q_values = self._q_values
 
         data_per_action = [[] for _ in range(self._num_actions)]
         Qs_per_action = [[] for _ in range(self._num_actions)]

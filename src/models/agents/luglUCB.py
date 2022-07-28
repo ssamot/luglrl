@@ -261,7 +261,7 @@ class LUGLUCBDecisionTree(LUGLLightGBM):
                 from sklearn.model_selection import GridSearchCV
 
 
-                clf = DecisionTreeRegressor(max_depth=3)
+                clf = DecisionTreeRegressor(min_samples_leaf=3)
                 clf.fit(X, y)
                 model = clf
 
