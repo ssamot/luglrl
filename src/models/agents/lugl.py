@@ -29,6 +29,8 @@ from sklearn import linear_model
 from copy import deepcopy
 
 
+N_BOOSTRAPS = 20
+
 def replay(buffer, discount_factor, q_values, step_size):
     mean_loss = []
     for elements in buffer:

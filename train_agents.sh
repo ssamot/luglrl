@@ -10,7 +10,7 @@ do
       mkdir models/games/$game
       if [ "$1" == "background" ]
       then
-        python src/models/train_agents.py $game $agent 500 200001 2>logs/$game\_$agent.err >logs/$game\_$agent.out &
+        python src/models/train_agents.py $game $agent 5000 200001 2>logs/$game\_$agent.err >logs/$game\_$agent.out &
       else
         python src/models/train_agents.py $game $agent 5000 200001
       fi
