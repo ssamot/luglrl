@@ -184,6 +184,8 @@ class LUGLLightGBM(rl_agent.AbstractAgent):
         else:
             if not is_evaluation:
                 target = time_step.rewards[self._player_id]
+                # make between zero and one
+                #target = (target + 1) / 2.0
                 self._n_games += 1
                 #print(self.episode_length_mean)
                 self.episode_length_mean = Q_MC(self.episode_length, self.episode_length_mean, 1000)

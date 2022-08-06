@@ -1,6 +1,6 @@
-connect_four
+go
 tic_tac_toe
+connect_four
+chess
 othello
 #backgammon
-#chess
-#go

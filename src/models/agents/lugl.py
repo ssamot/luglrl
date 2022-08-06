@@ -790,3 +790,58 @@ class LUGLLinearTemplate(LUGLNeuralNetwork):
 
             print(mse, r2)
         print("Total", total)
+
+
+class LUGLLightGBMCompressed(LUGLLightGBM):
+    def get_state_action(self, info_state, action):
+        X = np.array([info_state])
+
+        if (not hasattr(self, 'projection')):
+            n_components = 30
+            # print(info_state)
+            # exit()
+            # from sklearn import random_projection
+            # self.projection = random_projection.GaussianRandomProjection(n_components=10)
+            self.projection = np.random.choice([0, 1],
+                                               size=(X.shape[1], n_components))
+            # print(X.shape)
+            # exit()
+            # print("sdfasdfsapfdoadfpouOPAUDSOFIU")
+            # self.projection.fit(X)
+        info_state_new = tuple(np.dot(X, self.projection)[0])
+        # print(info_state_new)
+        # exit()
+
+        return (tuple(info_state_new), tuple([action]))
+
+
+
+    def train_supervised(self):
+
+            print("About to start training")
+            all_features = []
+            all_Qs = []
+
+            q_values = self.replay()
+            # q_values = self._q_values
+
+            for key, q_value in q_values.items():
+                state_features, action = list(
+                    key[0]), key[1]
+
+                total_features = state_features + list(action)
+                all_Qs.append(q_value)
+                all_features.append(total_features)
+
+            X = np.array(all_features)
+            y = np.array(all_Qs)
+
+            print(X.shape, y.shape)
+            from lightgbm.sklearn import LGBMRegressor
+            clf = LGBMRegressor(n_jobs=6, n_estimators=1000)
+            clf.fit(X, y, categorical_feature=[X.shape[1] - 1])
+            self.model = clf
+            mse = metrics.mean_squared_error(y, self.model.predict(X))
+            r2 = metrics.explained_variance_score(y, self.model.predict(X))
+
+            print(mse, r2)
