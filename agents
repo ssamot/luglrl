@@ -1,11 +1,12 @@
-#agents.luglI.LUGLDecisionTreeHoeffding
-#agents.dqn.DQN
-#agents.lugl.LUGLLightGBMCompressed
-#agents.lugl.LUGLDecisionTree
-#agents.luglUCB.LUGLUCBDecisionTree
-#agents.lugl.LUGLNeuralNetwork
+agents.lugl.LUGLRandomForest
+agents.lugl.LUGLDecisionTree
 agents.lugl.LUGLLightGBM
-#agents.luglUCB.LUGLUCBLightGBM
+#agents.luglI.LUGLDecisionTreeHoeffding
+agents.dqn.DQN
+#agents.lugl.LUGLLightGBMCompressed
+agents.luglUCB.LUGLUCBDecisionTree
+#agents.lugl.LUGLNeuralNetwork
+agents.luglUCB.LUGLUCBLightGBM
 #agents.lugl.LUGLLinear
 
 

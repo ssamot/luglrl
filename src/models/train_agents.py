@@ -104,7 +104,7 @@ def main(game_name, agent_class, comparison_point,  training_episodes):
                             agent._reset_dict()
                     else:
                         print(
-                            bcolors.FAIL + f"Still note there" + bcolors.ENDC)
+                            bcolors.FAIL + f"Still not there" + bcolors.ENDC)
                         for m, agent in enumerate(agents):
                             agent.model = models[m]
                         del archive[current_agent]

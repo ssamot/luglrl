@@ -60,10 +60,13 @@ def init_replay(buffer, discount_factor, q_values, step_size):
         for state_actions, r, t in buffer[prev]:
             target = r
             if not t:  # Q values are zero for terminal.
+                x = [q_values[state_action] for state_action
+                     in state_actions]
+                #print(x)
                 target += discount_factor * np.max(
-                    [q_values[state_action] for state_action
-                     in state_actions])
+                    x)
             all_targets.append(target)
+        #print(len(all_targets))
         target = np.mean(all_targets)
         # print(len(all_targets))
         prev_q_value = q_values[prev]
@@ -156,8 +159,8 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
             print("Replay loss", loss)
             if(loss == 0.0):
                 break;
-        #print(cloned_q.values())
-        #exit()
+        # #print(cloned_q.values())
+        # #exit()
         return cloned_q
 
     def _epsilon_greedy(self, info_state, legal_actions, epsilon):
@@ -177,9 +180,15 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         # q_values[info_state][a]  transformed to q_values[tuple(info_state) + tuple(a)]
         probs = np.zeros(self._num_actions)
 
+        #if(self.model is None):
         q_values = [self._q_values[self.get_state_action(info_state,
-                                                         a)] + np.random.random() * 0.0001
-                    for a in legal_actions]
+                                                             a)] + np.random.random() * 0.0001
+                        for a in legal_actions]
+        # else:
+        #     sa = np.array([list(info_state) + [a] for a in legal_actions])
+        #     q_values = self.model.predict(sa)
+
+
         greedy_q = np.argmax(q_values)
         # print(q_values)
 
@@ -187,7 +196,7 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         probs[legal_actions[greedy_q]] += (1 - epsilon)
         # print(probs, np.sum(probs))
         action = np.random.choice(range(self._num_actions), p=probs)
-        return action, probs
+        return action, probs, q_values
 
     def step(self, time_step, is_evaluation=False):
         """Returns the action to be taken and updates the Q-values if needed.
@@ -212,7 +221,7 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         # Act step: don't act at terminal states.
         if not time_step.last():
             epsilon = 0.0 if is_evaluation else self._epsilon
-            action, probs = self._epsilon_greedy(
+            action, probs, q_values = self._epsilon_greedy(
                 info_state, legal_actions, epsilon=epsilon)
         # print(time_step.rewards, time_step.last())
         # Learn step: don't learn during evaluation or at first agent steps.
@@ -222,9 +231,7 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
             state_actions = [self.get_state_action(info_state, a) for a in
                              legal_actions]
             if not time_step.last():  # Q values are zero for terminal.
-                target += self._discount_factor * max(
-                    [self._q_values[state_action] for state_action in
-                     state_actions])
+                target += self._discount_factor * max(q_values)
             # print(target)
             prev = self.get_state_action(self._prev_info_state,
                                          self._prev_action)
@@ -330,6 +337,11 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
 
 
 class LUGLLightGBM(LUGLNeuralNetwork):
+
+    def get_state_action(self, info_state, action):
+
+        return (tuple(info_state), tuple([action]))
+
 
     def get_phi(self, key):
         state_features, action = list(key[0]), list(key[1])
@@ -549,6 +561,139 @@ class LUGLLinear(LUGLNeuralNetwork):
 
 class LUGLRandomForest(LUGLNeuralNetwork):
 
+    def step(self, time_step, is_evaluation=False):
+        """Returns the action to be taken and updates the Q-values if needed.
+
+        Args:
+          time_step: an instance of rl_environment.TimeStep.
+          is_evaluation: bool, whether this is a training or evaluation call.
+
+        Returns:
+          A `rl_agent.StepOutput` containing the action probs and chosen action.
+        """
+        if self._centralized:
+            info_state = tuple(time_step.observations["info_state"])
+        else:
+            info_state = tuple(
+                time_step.observations["info_state"][self._player_id])
+        legal_actions = time_step.observations["legal_actions"][self._player_id]
+
+        # Prevent undefined errors if this agent never plays until terminal step
+        action, probs = None, None
+
+        # Act step: don't act at terminal states.
+        if not time_step.last():
+            epsilon = 0.0 if is_evaluation else self._epsilon
+            action, probs, q_values = self._epsilon_greedy(
+                info_state, legal_actions, epsilon=epsilon, is_evaluation = is_evaluation)
+        # print(time_step.rewards, time_step.last())
+        # Learn step: don't learn during evaluation or at first agent steps.
+        if self._prev_info_state and not is_evaluation:
+            # print("training")
+            target = time_step.rewards[self._player_id]
+            state_actions = [self.get_state_action(info_state, a) for a in
+                             legal_actions]
+            if not time_step.last():  # Q values are zero for terminal.
+                target += self._discount_factor * max(q_values)
+            # print(target)
+            prev = self.get_state_action(self._prev_info_state,
+                                         self._prev_action)
+            prev_q_value = self._q_values[prev]
+            self._last_loss_value = target - prev_q_value
+            # print(target, prev_q_value)
+
+            self._q_values[prev] += (
+                    self._step_size * self._last_loss_value)
+
+            if (prev not in self._buffer):
+                self._buffer[prev] = []
+
+            self._buffer[prev].append([
+                [a for a in state_actions],
+                time_step.rewards[self._player_id],
+                time_step.last()
+            ])
+
+            self._epsilon = self._epsilon_schedule.step()
+            self.episode_length += 1
+            if time_step.last():  # prepare for the next episode.
+                self._prev_info_state = None
+                self._n_games += 1
+                # print(self.episode_length)
+                self.episode_length = 0
+                # print(time_step.rewards, "rewards")
+                # exit()
+                if(self.model is not None):
+                    self.change_est()
+
+
+                return
+
+        # Don't mess up with the state during evaluation.
+        if not is_evaluation:
+            self._prev_info_state = info_state
+            self._prev_action = action
+        return rl_agent.StepOutput(action=action, probs=probs)
+
+    def change_est(self):
+        self.ests = []
+        for amodel in self.model:
+            if(amodel is not None):
+                est = np.random.randint(0, amodel.n_estimators)
+                self.ests.append(est)
+            else:
+                self.ests.append(0)
+
+    def _epsilon_greedy(self, info_state, legal_actions, epsilon, is_evaluation):
+        """Returns a valid epsilon-greedy action and valid action probs.
+
+        If the agent has not been to `info_state`, a valid random action is chosen.
+
+        Args:
+          info_state: hashable representation of the information state.
+          legal_actions: list of actions at `info_state`.
+          epsilon: float, prob of taking an exploratory action.
+
+        Returns:
+          A valid epsilon-greedy action and valid action probabilities.
+        """
+
+        # q_values[info_state][a]  transformed to q_values[tuple(info_state) + tuple(a)]
+        probs = np.zeros(self._num_actions)
+
+        #if(self.model is None):
+
+
+        if(not is_evaluation):
+            if(self.model is not None):
+                #print(self.ests)
+                q_values = [self.model[a].estimators_[self.ests[a]].predict(np.array(info_state)[np.newaxis, :] )
+                            for a in legal_actions]
+                #print(np.array(q_values).T[0])
+                q_values = np.array(q_values).T[0]
+                greedy_q = np.argmax(q_values)
+                epsilon = 0.01
+                probs[legal_actions] = epsilon / len(legal_actions)
+                probs[legal_actions[greedy_q]] += (1 - epsilon)
+            # print(q_values)
+            else:
+                q_values = [self._q_values[self.get_state_action(info_state,
+                                                                 a)]
+                            for a in legal_actions]
+                greedy_q = np.argmax(q_values)
+                probs[legal_actions] = epsilon / len(legal_actions)
+                probs[legal_actions[greedy_q]] += (1 - epsilon)
+        else:
+            q_values = [self._q_values[self.get_state_action(info_state,
+                                                             a)]
+                        for a in legal_actions]
+            greedy_q = np.argmax(q_values)
+            probs[legal_actions[greedy_q]] = 1
+        # print(probs, np.sum(probs))
+        action = np.random.choice(range(self._num_actions), p=probs)
+        return action, probs, q_values
+
+
     def _default_value(self, key):
         if (self.model is None):
             return 0.0
@@ -559,18 +704,19 @@ class LUGLRandomForest(LUGLNeuralNetwork):
             if (self.model[action] is None):
                 return 0.0
             else:
-                # r = np.random.randint(0, self.model[action].n_estimators)
+
                 value = self.model[action].predict(phi)
                 return value[0]
 
     def train_supervised(self):
 
+
         print("About to start training")
 
         print(len(self._q_values))
 
-        # q_values = self.replay()
-        q_values = self._q_values
+        q_values = self.replay()
+        #q_values = self._q_values
 
         data_per_action = [[] for _ in range(self._num_actions)]
         Qs_per_action = [[] for _ in range(self._num_actions)]
@@ -606,29 +752,34 @@ class LUGLRandomForest(LUGLNeuralNetwork):
                 #                    n_jobs=-1, cv=10,
                 #                    scoring="neg_mean_squared_error")
 
-                from sklearn.ensemble import ExtraTreesRegressor
-                from sklearn.manifold import LocallyLinearEmbedding
-                from sklearn.tree import DecisionTreeRegressor
-                from sklearn.kernel_approximation import RBFSampler
-                # clf = ExtraTreesRegressor(min_samples_leaf=3, bootstrap=True, n_jobs=20)
+                from sklearn.ensemble import ExtraTreesRegressor, RandomForestRegressor
 
-                from lightgbm.sklearn import LGBMRegressor
-                from sklearn.pipeline import Pipeline
-                # clf = LGBMRegressor(n_jobs=12, n_estimators=100,boosting_type="rf",bagging_freq = 1, bagging_fraction = 0.7)
+                model = RandomForestRegressor(max_depth=3, n_jobs=6)
+                model.fit(X,y)
 
-                model = ExtraTreesRegressor(bootstrap=True, n_jobs=20,
-                                            n_estimators=1000)
-                pipe = Pipeline([('scaler', RBFSampler()), ('svc', model)])
 
-                pipe.fit(X, y)
-                y_hat = pipe.predict(X)
-
-                model = DecisionTreeRegressor()
-                pipe = Pipeline(
-                    [('scaler', RBFSampler()), ('svc', model)])
-                pipe = model
-                model.fit(X, y_hat)
-                print("Max depth", model.tree_.max_depth, )
+                #from sklearn.manifold import LocallyLinearEmbedding
+                # from sklearn.tree import DecisionTreeRegressor
+                # from sklearn.kernel_approximation import RBFSampler
+                # # clf = ExtraTreesRegressor(min_samples_leaf=3, bootstrap=True, n_jobs=20)
+                #
+                # from lightgbm.sklearn import LGBMRegressor
+                # from sklearn.pipeline import Pipeline
+                # # clf = LGBMRegressor(n_jobs=12, n_estimators=100,boosting_type="rf",bagging_freq = 1, bagging_fraction = 0.7)
+                #
+                # model = ExtraTreesRegressor(bootstrap=True, n_jobs=20,
+                #                             n_estimators=1000)
+                # pipe = Pipeline([('scaler', RBFSampler()), ('svc', model)])
+                #
+                # pipe.fit(X, y)
+                # y_hat = pipe.predict(X)
+                #
+                # model = DecisionTreeRegressor()
+                # pipe = Pipeline(
+                #     [('scaler', RBFSampler()), ('svc', model)])
+                # pipe = model
+                # model.fit(X, y_hat)
+                # print("Max depth", model.tree_.max_depth, )
 
                 mse = metrics.mean_squared_error(y, model.predict(X))
                 r2 = metrics.explained_variance_score(y, model.predict(X))
@@ -637,7 +788,11 @@ class LUGLRandomForest(LUGLNeuralNetwork):
             else:
                 self.model.append(None)
 
+        self.change_est()
         print("Total", total)
+
+        # import warnings
+        # warnings.filterwarnings('error')
 
 
 from scipy.spatial.distance import cdist

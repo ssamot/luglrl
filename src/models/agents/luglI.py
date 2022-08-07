@@ -68,12 +68,12 @@ class LUGLDecisionTreeHoeffding(rl_agent.AbstractAgent):
 
 
     def new_model(self):
-        # self.nm = HoeffdingTreeRegressor(leaf_prediction="model",
-        #                                      min_samples_split=200,
-        #                                       nominal_attributes=[
-        #                                           self.state_representation_size])
+        self.nm = HoeffdingTreeRegressor(leaf_prediction="model",
+                                             min_samples_split=200,
+                                              nominal_attributes=[
+                                                  self.state_representation_size])
 
-        #self.nm = AdaptiveRandomForestRegressor()
+        self.nm = AdaptiveRandomForestRegressor()
         self.nm = BaggingRegressor(HoeffdingTreeRegressor(
 
             min_samples_split=200,
