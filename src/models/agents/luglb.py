@@ -13,19 +13,6 @@ from river.tree import HoeffdingAdaptiveTreeRegressor, \
         HoeffdingTreeRegressor
 
 
-N_BOOSTRAPS = 20
-
-
-
-class keydefaultdict(collections.defaultdict):
-    def __missing__(self, key):
-        if self.default_factory is None:
-            raise KeyError(key)
-        else:
-            ret = self[key] = self.default_factory(key)
-            return ret
-
-
 class DCLF(rl_agent.AbstractAgent):
     """Tabular Q-Learning agent.
 
@@ -66,11 +53,13 @@ class DCLF(rl_agent.AbstractAgent):
     def __getstate__(self):
         state = dict(self.__dict__)
         del state['_buffer']
+        del state['_q_values']
         return state
 
     def __setstate__(self, state):
         self.__dict__ = state
         self._buffer = ReplayBuffer(self.maximum_size)
+        self._q_values = {}
 
 
     def get_state_action(self, info_state, action):
@@ -218,6 +207,8 @@ class DCLF(rl_agent.AbstractAgent):
 
     def _reset_dict(self):
         pass
+        # self._q_values = {}
+        # self._buffer = ReplayBuffer(self.maximum_size)
 
 
 class LUGLLightGBM(DCLF):

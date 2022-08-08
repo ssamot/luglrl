@@ -116,22 +116,6 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         self._buffer = {}
 
 
-
-
-    def _default_value(self, key):
-        if (self.model is None):
-            return [0] * self._num_actions
-        else:
-            state_features, action = list(key[0]), list(key[1])[0]
-            action_features = list(np.zeros(shape=self._num_actions))
-            if (action is not None):
-                action_features[action] = 1
-            total_features = state_features + action_features
-            phi = np.array(total_features)[np.newaxis, :]
-            value = self.model(phi)
-
-            return value[0][0]
-
     def get_state_action(self, info_state, action):
         return (tuple(info_state + [action]), tuple([action]))
 
@@ -226,14 +210,14 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
             self._q_values[prev] += (
                     self._step_size * self._last_loss_value)
 
-            # if (prev not in self._buffer):
-            #     self._buffer[prev] = []
-            #
-            # self._buffer[prev].append([
-            #     [a for a in state_actions],
-            #     time_step.rewards[self._player_id],
-            #     time_step.last()
-            # ])
+            if (prev not in self._buffer):
+                self._buffer[prev] = []
+
+            self._buffer[prev].append([
+                [a for a in state_actions],
+                time_step.rewards[self._player_id],
+                time_step.last()
+            ])
 
             self._epsilon = self._epsilon_schedule.step()
             self.episode_length += 1
@@ -256,68 +240,9 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
     def loss(self):
         return self._last_loss_value
 
-    def build_model(self, y_axis):
 
-        # imports here, because we can't be loading tensorflow in subclasses
-        from keras.models import Sequential
-        from keras.layers import Dense
-        import tensorflow as tf
-        import keras
-        n_threads = 6
-        tf.config.threading.set_inter_op_parallelism_threads(n_threads)
-        tf.config.threading.set_intra_op_parallelism_threads(n_threads)
 
-        input_shape = (y_axis,)
-        model = Sequential()
-        model.add(Dense(y_axis, input_shape=input_shape, activation='relu'))
-        model.add(Dense(1, activation='linear'))
 
-        model.compile(loss=keras.losses.mean_squared_error,
-                      optimizer=keras.optimizers.Adam(), jit_compile=False,
-
-                      )
-        return model
-
-    def train_supervised(self):
-
-        print("About to start training")
-        all_features = []
-        all_Qs = []
-
-        q_values = self.replay()
-
-        for key, q_value in q_values.items():
-            state_features, action = list(
-                key[0]), key[1]
-
-            action_features = list(
-                np.zeros(shape=self._num_actions))
-            action_features[action[0]] = 1
-            total_features = state_features + action_features
-            all_Qs.append(q_value)
-            all_features.append(total_features)
-
-            # print(len(state_features), len(action_features), len(total_features))
-        X = np.array(all_features)
-        y = np.array(all_Qs)
-        import os
-        N = 4
-        os.environ["OMP_NUM_THREADS"] = f"{N}"
-        os.environ['TF_NUM_INTEROP_THREADS'] = f"{N}"
-        os.environ['TF_NUM_INTRAOP_THREADS'] = f"{N}"
-
-        self.model = self.build_model(X.shape[1])
-        print(X.shape, y.shape)
-        import keras
-        callback = keras.callbacks.EarlyStopping(monitor='loss',
-                                                 patience=10)
-        self.model.fit(X, y, epochs=10000, verbose=True, callbacks=[callback])
-        mse = metrics.mean_squared_error(y, self.model.predict(X,
-                                                               verbose=False))
-        r2 = metrics.explained_variance_score(y, self.model.predict(X,
-                                                                    verbose=False))
-
-        print(mse, r2)
 
 
 class LUGLLightGBM(LUGLNeuralNetwork):
@@ -336,7 +261,7 @@ class LUGLLightGBM(LUGLNeuralNetwork):
     def _default_value(self, key):
         if (self.model is None):
 
-            return 0.0
+            return [0.0
         else:
             state_features, action = list(key[0]), list(key[1])
             total_features = state_features + action
@@ -408,7 +333,7 @@ class LUGLDecisionTree(LUGLLightGBM):
 
         print("About to start training")
 
-        #print(len(self._q_values))
+        print(len(self._q_values))
 
         q_values = self.replay()
         #q_values = self._q_values
