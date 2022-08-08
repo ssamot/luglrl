@@ -1,23 +1,3 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""Tabular Q-learning agent."""
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import collections
 import numpy as np
 
@@ -27,6 +7,7 @@ from sklearn import metrics
 from category_encoders import TargetEncoder
 from sklearn import linear_model
 from copy import deepcopy
+from tqdm import tqdm
 
 
 N_BOOSTRAPS = 20
@@ -55,7 +36,7 @@ def replay(buffer, discount_factor, q_values, step_size):
 
 def init_replay(buffer, discount_factor, q_values, step_size):
     mean_loss = []
-    for prev in buffer.keys():
+    for prev in tqdm(buffer.keys()):
         all_targets = []
         for state_actions, r, t in buffer[prev]:
             target = r
@@ -152,7 +133,7 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         return (tuple(info_state), tuple([action]))
 
     def replay(self):
-        cloned_q = deepcopy(self._q_values)
+        cloned_q = (self._q_values)
         for _ in range(1):
             loss = init_replay(self._buffer, self._discount_factor,
                                cloned_q, self._step_size)
@@ -327,7 +308,7 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         import keras
         callback = keras.callbacks.EarlyStopping(monitor='loss',
                                                  patience=10)
-        self.model.fit(X, y, epochs=10000, verbose=False, callbacks=[callback])
+        self.model.fit(X, y, epochs=10000, verbose=True, callbacks=[callback])
         mse = metrics.mean_squared_error(y, self.model.predict(X,
                                                                verbose=False))
         r2 = metrics.explained_variance_score(y, self.model.predict(X,
@@ -384,7 +365,7 @@ class LUGLLightGBM(LUGLNeuralNetwork):
         print(X.shape, y.shape)
         from lightgbm.sklearn import LGBMRegressor
         clf = LGBMRegressor(n_jobs=6, n_estimators=1000)
-        clf.fit(X, y, categorical_feature=range(X.shape[1]))
+        clf.fit(X, y, categorical_feature=[X.shape[1]-1])
         self.model = clf
         mse = metrics.mean_squared_error(y, self.model.predict(X))
         r2 = metrics.explained_variance_score(y, self.model.predict(X))
@@ -444,10 +425,25 @@ class LUGLDecisionTree(LUGLLightGBM):
                 from sklearn.tree import DecisionTreeRegressor, \
                     DecisionTreeClassifier
                 from sklearn.metrics import mean_squared_error
-                clf = DecisionTreeRegressor(min_samples_leaf=3)
+                from sklearn.ensemble import ExtraTreesRegressor
+                # model = linear_model.LinearRegression()
+                from sklearn.model_selection import GridSearchCV
+                # ex = ExtraTreesRegressor(n_estimators=100, n_jobs=100, bootstrap=True)
+                # ex.fit(X,y)
 
-                clf.fit(X, y)
-                model = clf
+                dt = DecisionTreeRegressor()
+                # dt.fit(X,ex.predict(X))
+                # #path = dt.cost_complexity_pruning_path(X, y)
+                #
+                params = {"min_samples_split": [20, 100, 200, 300, 500, 2000, 3000]}
+                result = GridSearchCV(dt, param_grid=params,
+                                      scoring="neg_mean_squared_error",
+                                      n_jobs=100, cv=5)
+
+                model = dt
+                result.fit(X, y)
+                model = result.best_estimator_
+                print(result.best_params_)
 
                 mse = metrics.mean_squared_error(y, model.predict(X))
                 r2 = metrics.explained_variance_score(y, model.predict(X))
