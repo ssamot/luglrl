@@ -4,14 +4,38 @@ import numpy as np
 from open_spiel.python import rl_agent
 from open_spiel.python import rl_tools
 from sklearn import metrics
-from category_encoders import TargetEncoder
-from sklearn import linear_model
-from copy import deepcopy
 from tqdm import tqdm
-from open_spiel.python.algorithms.dqn import ReplayBuffer
-from river.tree import HoeffdingAdaptiveTreeRegressor, \
-        HoeffdingTreeRegressor
 
+
+
+
+def init_replay(buffer, discount_factor, q_values, num_actions):
+    mean_loss = []
+
+    for prev_state in tqdm(buffer.keys()):
+
+        for action in range(num_actions):
+            all_targets = []
+            if(len(buffer[prev_state][action]) > 0):
+                for infostate, legal_actions, r, t in buffer[prev_state][action]:
+                    target = r
+                    if not t:  # Q values are zero for terminal.
+                        x = [q_values[infostate][a] for a in legal_actions]
+                        print(x, "sadfasdfasfdafd", r)
+                        target += discount_factor * np.max(
+                            x)
+                    #print(target,r)
+                    all_targets.append(target)
+
+            target = np.mean(all_targets)
+            # print(len(all_targets))
+            prev_q_value = q_values[prev_state][action]
+            loss = target - prev_q_value
+            # print(loss)
+            q_values[prev_state][action] = target
+            mean_loss.append(loss)
+
+    return np.mean(mean_loss)
 
 class DCLF(rl_agent.AbstractAgent):
     """Tabular Q-Learning agent.
@@ -45,7 +69,7 @@ class DCLF(rl_agent.AbstractAgent):
         self.episode_length = 0
         self.model = None
         self.maximum_size = int(1e5)
-        self._buffer = ReplayBuffer(self.maximum_size)
+        self._buffer = {}
         self.batch_size = 32
 
 
@@ -58,7 +82,7 @@ class DCLF(rl_agent.AbstractAgent):
 
     def __setstate__(self, state):
         self.__dict__ = state
-        self._buffer = ReplayBuffer(self.maximum_size)
+        self._buffer = {}
         self._q_values = {}
 
 
@@ -90,13 +114,8 @@ class DCLF(rl_agent.AbstractAgent):
                 q_values = self._q_values[info_state][legal_actions]
                 greedy_q = np.argmax(q_values)
         else:
-            if (info_state not in self._q_values):
-                q_values = self.get_model_qs(info_state, legal_actions)
-            else:
-                q_values = self._q_values[info_state][legal_actions]
-
+            q_values = self.get_model_qs(info_state, legal_actions)
             greedy_q = np.argmax(q_values)
-
 
 
         probs[legal_actions] = epsilon / len(legal_actions)
@@ -104,6 +123,19 @@ class DCLF(rl_agent.AbstractAgent):
         # print(probs, np.sum(probs))
         action = np.random.choice(range(self._num_actions), p=probs)
         return action, probs
+
+
+    def replay(self):
+        cloned_q = (self._q_values)
+        for _ in range(1):
+            loss = init_replay(self._buffer, self._discount_factor,
+                               cloned_q, self._num_actions)
+            print("Replay loss", loss)
+            if(loss == 0.0):
+                break;
+        # #print(cloned_q.values())
+        # #exit()
+        return cloned_q
 
 
     def step(self, time_step, is_evaluation=False):
@@ -143,6 +175,15 @@ class DCLF(rl_agent.AbstractAgent):
             #                   info_state,
             #                   legal_actions, rewards, time_step.last()])
 
+            if (self._prev_info_state not in self._buffer):
+                self._buffer[self._prev_info_state] = [[] for _ in range(self._num_actions)]
+
+            self._buffer[self._prev_info_state][self._prev_action].append([
+                info_state, legal_actions,
+                time_step.rewards[self._player_id],
+                time_step.last()
+            ])
+
             if (info_state not in self._q_values):
                  self._q_values[info_state] = np.random.random(
                     size=self._num_actions) * 0.0001
@@ -151,24 +192,6 @@ class DCLF(rl_agent.AbstractAgent):
                 self._q_values[self._prev_info_state] = np.random.random(
                     size=self._num_actions) * 0.0001
             # sample and calculate q-values
-
-            target = rewards
-
-            if (not time_step.last()):
-                feature_qs = self._q_values[info_state][
-                    legal_actions]
-
-                target += self._discount_factor * max(feature_qs)
-
-            # print(target, prev_q_value)
-
-            prev_q_value = self._q_values[self._prev_info_state][self._prev_action]
-            loss = target - prev_q_value
-
-            self._q_values[self._prev_info_state][self._prev_action] += (
-                    self._step_size * loss)
-
-            #self.update()
 
 
 
@@ -193,30 +216,7 @@ class DCLF(rl_agent.AbstractAgent):
         return rl_agent.StepOutput(action=action, probs=probs)
 
 
-    def update(self):
-        if (len(self._buffer) > self.batch_size):
-            for (
-                    prev_info_state, prev_action, l_info_state, l_legal_actions,
-                    rewards,
-                    last) in self._buffer.sample(self.batch_size):
-                target = rewards
 
-                if (not last):
-
-                    feature_qs = self._q_values[l_info_state][
-                            l_legal_actions]
-
-                    target += self._discount_factor * max(feature_qs)
-
-                # print(target, prev_q_value)
-
-
-                prev_q_value = self._q_values[prev_info_state][prev_action]
-                loss = target - prev_q_value
-
-                self._q_values[prev_info_state][prev_action] += (
-                        self._step_size * loss)
-                # print(loss, target, self._q_values[prev_info_state][prev_action])
 
     @property
     def loss(self):
@@ -224,9 +224,9 @@ class DCLF(rl_agent.AbstractAgent):
 
 
     def _reset_dict(self):
-        #pass
-        self._q_values = {}
-        self._buffer = ReplayBuffer(self.maximum_size)
+        pass
+        # self._q_values = {}
+        # self._buffer = ReplayBuffer(self.maximum_size)
 
 
 class LUGLLightGBM(DCLF):
@@ -253,8 +253,9 @@ class LUGLLightGBM(DCLF):
 
         # make targets!
         #for self
+        q_values = self.replay()
 
-        for state in self._q_values.keys():
+        for state in q_values.keys():
             for action, Q in enumerate(self._q_values[state]):
                 all_features.append(list(state) + [action])
                 all_Qs.append(Q)

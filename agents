@@ -3,7 +3,7 @@
 #agents.luglUCB.LUGLUCBLightGBM
 #agents.lugl.LUGLDecisionTree
 #agents.dclf.DecisionTree
-agents.luglb.LUGLLightGBM
+agents.luglbb.LUGLLightGBM
 agents.luglb.DecisionTree
 #agents.luglI.LUGLDecisionTreeHoeffding
 agents.dqn.DQN

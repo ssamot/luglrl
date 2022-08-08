@@ -116,6 +116,22 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         self._buffer = {}
 
 
+
+
+    def _default_value(self, key):
+        if (self.model is None):
+            return [0] * self._num_actions
+        else:
+            state_features, action = list(key[0]), list(key[1])[0]
+            action_features = list(np.zeros(shape=self._num_actions))
+            if (action is not None):
+                action_features[action] = 1
+            total_features = state_features + action_features
+            phi = np.array(total_features)[np.newaxis, :]
+            value = self.model(phi)
+
+            return value[0][0]
+
     def get_state_action(self, info_state, action):
         return (tuple(info_state + [action]), tuple([action]))
 
@@ -240,7 +256,27 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
     def loss(self):
         return self._last_loss_value
 
+    def build_model(self, y_axis):
 
+        # imports here, because we can't be loading tensorflow in subclasses
+        from keras.models import Sequential
+        from keras.layers import Dense
+        import tensorflow as tf
+        import keras
+        n_threads = 6
+        tf.config.threading.set_inter_op_parallelism_threads(n_threads)
+        tf.config.threading.set_intra_op_parallelism_threads(n_threads)
+
+        input_shape = (y_axis,)
+        model = Sequential()
+        model.add(Dense(y_axis, input_shape=input_shape, activation='relu'))
+        model.add(Dense(1, activation='linear'))
+
+        model.compile(loss=keras.losses.mean_squared_error,
+                      optimizer=keras.optimizers.Adam(), jit_compile=False,
+
+                      )
+        return model
 
 
 
@@ -261,7 +297,7 @@ class LUGLLightGBM(LUGLNeuralNetwork):
     def _default_value(self, key):
         if (self.model is None):
 
-            return [0.0
+            return 0.0
         else:
             state_features, action = list(key[0]), list(key[1])
             total_features = state_features + action
