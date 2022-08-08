@@ -10,6 +10,7 @@ from copy import deepcopy
 from tqdm import tqdm
 
 
+
 N_BOOSTRAPS = 20
 
 def replay(buffer, discount_factor, q_values, step_size):
@@ -114,10 +115,12 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         self._q_values = keydefaultdict(self._default_value)
         self._buffer = {}
 
+
+
+
     def _default_value(self, key):
         if (self.model is None):
-
-            return 0.0
+            return [0] * self._num_actions
         else:
             state_features, action = list(key[0]), list(key[1])[0]
             action_features = list(np.zeros(shape=self._num_actions))
@@ -130,7 +133,7 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
             return value[0][0]
 
     def get_state_action(self, info_state, action):
-        return (tuple(info_state), tuple([action]))
+        return (tuple(info_state + [action]), tuple([action]))
 
     def replay(self):
         cloned_q = (self._q_values)
@@ -162,14 +165,14 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
         probs = np.zeros(self._num_actions)
 
         #if(self.model is None):
-        q_values = [self._q_values[self.get_state_action(info_state,
-                                                             a)] + np.random.random() * 0.0001
-                        for a in legal_actions]
-        # else:
+        # q_values = [self._q_values[self.state(info_state,
+        #                                                      a)] + np.random.random() * 0.0001
+        #                 for a in legal_actions]
+        # # else:
         #     sa = np.array([list(info_state) + [a] for a in legal_actions])
         #     q_values = self.model.predict(sa)
 
-
+        q_values = self.get_q_values(info_state)
         greedy_q = np.argmax(q_values)
         # print(q_values)
 
@@ -223,14 +226,14 @@ class LUGLNeuralNetwork(rl_agent.AbstractAgent):
             self._q_values[prev] += (
                     self._step_size * self._last_loss_value)
 
-            if (prev not in self._buffer):
-                self._buffer[prev] = []
-
-            self._buffer[prev].append([
-                [a for a in state_actions],
-                time_step.rewards[self._player_id],
-                time_step.last()
-            ])
+            # if (prev not in self._buffer):
+            #     self._buffer[prev] = []
+            #
+            # self._buffer[prev].append([
+            #     [a for a in state_actions],
+            #     time_step.rewards[self._player_id],
+            #     time_step.last()
+            # ])
 
             self._epsilon = self._epsilon_schedule.step()
             self.episode_length += 1
@@ -373,28 +376,39 @@ class LUGLLightGBM(LUGLNeuralNetwork):
         print(mse, r2)
 
 
+    # def cleanup(self):
+    #     keys = []
+    #
+    #     for key in tqdm(self._buffer.keys()):
+    #         if(len(self._buffer[key]) > 3):
+    #             keys.append(key)
+    #     print("CLEANING UP", len(keys))
+    #     for key in keys:
+    #         del self._buffer[key]
+    #         del self._q_values[key]
+
+
 
 class LUGLDecisionTree(LUGLLightGBM):
 
+    def get_q_values(self, state_features, legal_actions):
 
-    def _default_value(self, key):
         if (self.model is None):
-            return 0.0
+            q_values = [(0.0 + np.random.random() * 0.0001)
+                        for a in legal_actions]
+            # print(q_values)
         else:
-            state_features, action = list(key[0]), key[1][0]
-            # print(action, "action")
-            phi = np.array(state_features)[np.newaxis, :]
-            if (self.model[action] is None):
-                return 0.0
-            else:
-                value = self.model[action].predict(phi)
-                return value[0]
+            q_values = [
+                self.model[a].predict(np.array(state_features)[np.newaxis, :])[
+                    0]
+                for a in legal_actions]
+        return q_values
 
     def train_supervised(self):
 
         print("About to start training")
 
-        print(len(self._q_values))
+        #print(len(self._q_values))
 
         q_values = self.replay()
         #q_values = self._q_values
