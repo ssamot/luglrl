@@ -344,19 +344,10 @@ class LUGLUCBDecisionTree(LUGLUCBLightGBM):
                 # ex = ExtraTreesRegressor(n_estimators=100, n_jobs=100, bootstrap=True)
                 # ex.fit(X,y)
 
-                dt = DecisionTreeRegressor()
-                # dt.fit(X,ex.predict(X))
-                # #path = dt.cost_complexity_pruning_path(X, y)
-                #
-                params = {"min_samples_split": [2, 20,  100, 200, 300]}
-                result = GridSearchCV(dt, param_grid=params,
-                                      scoring="neg_mean_squared_error",
-                                      n_jobs=100, cv=5)
+                dt = DecisionTreeRegressor(max_depth=3)
 
+                dt.fit(X, y)
                 model = dt
-                result.fit(X, y)
-                model = result.best_estimator_
-                print(result.best_params_)
 
                 mse = metrics.mean_squared_error(y, model.predict(X))
                 r2 = metrics.explained_variance_score(y, model.predict(X))

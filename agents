@@ -1,6 +1,6 @@
 agents.luglbUCB.LUGLUCBDecisionTree
-agents.luglbUCB.LUGLUCBLightGBM
-agents.luglb.LUGLLightGBM
 agents.luglb.LUGLDecisionTree
+agents.luglb.LUGLLightGBM
+agents.luglbUCB.LUGLUCBLightGBM
 agents.dqn.DQN
 

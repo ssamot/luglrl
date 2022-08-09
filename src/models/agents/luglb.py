@@ -186,7 +186,6 @@ class DCLF(rl_agent.AbstractAgent):
             self._prev_action = action
         return rl_agent.StepOutput(action=action, probs=probs)
 
-
     def update(self):
         if (len(self._buffer) > self.batch_size):
             for (
@@ -318,23 +317,13 @@ class LUGLDecisionTree(LUGLLightGBM):
                 from sklearn.metrics import mean_squared_error
                 from sklearn.ensemble import ExtraTreesRegressor
                 # model = linear_model.LinearRegression()
-                from sklearn.model_selection import GridSearchCV
                 # ex = ExtraTreesRegressor(n_estimators=100, n_jobs=100, bootstrap=True)
                 # ex.fit(X,y)
 
-                dt = DecisionTreeRegressor()
-                # dt.fit(X,ex.predict(X))
-                # #path = dt.cost_complexity_pruning_path(X, y)
-                #
-                params = {"min_samples_split": [2, 20,  100, 200, 300]}
-                result = GridSearchCV(dt, param_grid=params,
-                                      scoring="neg_mean_squared_error",
-                                      n_jobs=100, cv=5)
+                dt = DecisionTreeRegressor(max_depth=3)
 
+                dt.fit(X, y)
                 model = dt
-                result.fit(X, y)
-                model = result.best_estimator_
-                print(result.best_params_)
 
                 mse = metrics.mean_squared_error(y, model.predict(X))
                 r2 = metrics.explained_variance_score(y, model.predict(X))
