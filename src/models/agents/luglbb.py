@@ -114,8 +114,15 @@ class DCLF(rl_agent.AbstractAgent):
                 q_values = self._q_values[info_state][legal_actions]
                 greedy_q = np.argmax(q_values)
         else:
-            q_values = self.get_model_qs(info_state, legal_actions)
-            greedy_q = np.argmax(q_values)
+
+            if (info_state in self._q_values):
+                q_values = self._q_values[info_state][legal_actions]
+            else:
+                q_values = self.get_model_qs(info_state, legal_actions)
+                self._q_values[info_state] = q_values
+
+
+        greedy_q = np.argmax(q_values)
 
 
         probs[legal_actions] = epsilon / len(legal_actions)
@@ -184,13 +191,13 @@ class DCLF(rl_agent.AbstractAgent):
                 time_step.last()
             ])
 
-            if (info_state not in self._q_values):
-                 self._q_values[info_state] = np.random.random(
-                    size=self._num_actions) * 0.0001
-
-            if (self._prev_info_state not in self._q_values):
-                self._q_values[self._prev_info_state] = np.random.random(
-                    size=self._num_actions) * 0.0001
+            # if (info_state not in self._q_values):
+            #      self._q_values[info_state] = np.random.random(
+            #         size=self._num_actions) * 0.0001
+            #
+            # if (self._prev_info_state not in self._q_values):
+            #     self._q_values[self._prev_info_state] = np.random.random(
+            #         size=self._num_actions) * 0.0001
             # sample and calculate q-values
 
 

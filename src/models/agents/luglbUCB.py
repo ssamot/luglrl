@@ -12,6 +12,17 @@ from open_spiel.python.algorithms.dqn import ReplayBuffer
 from river.tree import HoeffdingAdaptiveTreeRegressor, \
         HoeffdingTreeRegressor
 
+def child_U(all_childs):
+    C = 1
+    parent_visits = np.sum(all_childs)
+    all_U = np.array([C* np.sqrt(np.log(parent_visits)/child_visits)
+             for child_visits in all_childs])
+    return all_U
+
+
+def Q_MC(r, old_mean, visits):
+    new_mean = old_mean + ((r-old_mean)/visits)
+    return new_mean
 
 class DCLF(rl_agent.AbstractAgent):
     """Tabular Q-Learning agent.
@@ -40,14 +51,13 @@ class DCLF(rl_agent.AbstractAgent):
 
         self._prev_info_state = None
         self._last_loss_value = None
-        self._q_values = {}
-        self._n_games = 0
         self.episode_length = 0
         self.model = None
         self.maximum_size = int(1e5)
-        self._buffer = ReplayBuffer(self.maximum_size)
         self.batch_size = 32
-        self._tbr = {}
+        self._reset_dict()
+
+
 
 
 
@@ -56,20 +66,19 @@ class DCLF(rl_agent.AbstractAgent):
         del state['_buffer']
         del state['_q_values']
         del state['_tbr']
+        del state['_N']
         return state
 
     def __setstate__(self, state):
         self.__dict__ = state
-        self._buffer = ReplayBuffer(self.maximum_size)
-        self._q_values = {}
-        self._tbr = {}
+        self._reset_dict()
 
 
     def get_state_action(self, info_state, action):
         return (tuple(info_state), tuple([action]))
 
 
-    def _epsilon_greedy(self, info_state, legal_actions, epsilon):
+    def _ucb(self, info_state, legal_actions, is_evaluation):
         """Returns a valid epsilon-greedy action and valid action probs.
 
         If the agent has not been to `info_state`, a valid random action is chosen.
@@ -89,21 +98,32 @@ class DCLF(rl_agent.AbstractAgent):
         if (info_state not in self._q_values):
             self._q_values[info_state] = np.random.random(
                 size=self._num_actions) * 0.0001
+            self._N[info_state] = np.ones(shape = (self._num_actions))
+            #print(self._N[info_state] , "sadfasdfsdf")
 
             if(self.model is not None):
                 self._q_values[info_state][legal_actions] = self.get_model_qs(
                     info_state, legal_actions)
 
         q_values = self._q_values[info_state][legal_actions]
+
         greedy_q = np.argmax(q_values)
 
+        if (not is_evaluation):
+            child_visits = self._N[info_state][legal_actions]
+            #print(legal_actions, child_visits)
+            all_Us = child_U(child_visits)
+            #print(all_Us, "sdfsdfsdffds")
+            greedy_q = np.argmax(q_values +all_Us)
 
+        action = legal_actions[greedy_q]
+        probs[action] = 1
 
-        probs[legal_actions] = epsilon / len(legal_actions)
-        probs[legal_actions[greedy_q]] += (1 - epsilon)
-        # print(probs, np.sum(probs))
-        action = np.random.choice(range(self._num_actions), p=probs)
         return action, probs
+
+
+
+
 
 
     def step(self, time_step, is_evaluation=False):
@@ -129,8 +149,8 @@ class DCLF(rl_agent.AbstractAgent):
         # Act step: don't act at terminal states.
         if not time_step.last():
             epsilon = 0.0 if is_evaluation else self._epsilon
-            action, probs = self._epsilon_greedy(
-                info_state, legal_actions, epsilon=epsilon)
+            action, probs = self._ucb(
+                info_state, legal_actions, is_evaluation)
         # print(time_step.rewards, time_step.last())
         # Learn step: don't learn during evaluation or at first agent steps.
         if self._prev_info_state and not is_evaluation:
@@ -158,6 +178,7 @@ class DCLF(rl_agent.AbstractAgent):
 
             self._q_values[self._prev_info_state][self._prev_action] += (
                     self._step_size * loss)
+            self._N[self._prev_info_state][self._prev_action] +=1
 
             self._tbr[(self._prev_info_state, self._prev_action)] = \
             self._q_values[self._prev_info_state][self._prev_action]
@@ -173,7 +194,7 @@ class DCLF(rl_agent.AbstractAgent):
             self.episode_length += 1
             if time_step.last():  # prepare for the next episode.
                 self._prev_info_state = None
-                self._n_games += 1
+                #self._n_games += 1
                 # print(self.episode_length)
                 self.episode_length = 0
                 # print(time_step.rewards, "rewards")
@@ -225,9 +246,10 @@ class DCLF(rl_agent.AbstractAgent):
         self._q_values = {}
         self._buffer = ReplayBuffer(self.maximum_size)
         self._tbr = {}
+        self._N = {}
 
 
-class LUGLLightGBM(DCLF):
+class LUGLUCBLightGBM(DCLF):
 
     def get_model_qs(self, state_features, legal_actions):
 
@@ -273,7 +295,7 @@ class LUGLLightGBM(DCLF):
 
 
 
-class LUGBDecisionTree(LUGLLightGBM):
+class LUGLUCBDecisionTree(LUGLUCBLightGBM):
 
 
 
