@@ -4,13 +4,9 @@ import numpy as np
 from open_spiel.python import rl_agent
 from open_spiel.python import rl_tools
 from sklearn import metrics
-from category_encoders import TargetEncoder
-from sklearn import linear_model
-from copy import deepcopy
-from tqdm import tqdm
-from open_spiel.python.algorithms.dqn import ReplayBuffer
-from river.tree import HoeffdingAdaptiveTreeRegressor, \
-        HoeffdingTreeRegressor
+from agents.luglb import LUGLDecisionTree, LUGLLightGBM
+from agents.utils import ReplayBuffer
+
 
 def child_U(all_childs):
     C = 1
@@ -24,7 +20,7 @@ def Q_MC(r, old_mean, visits):
     new_mean = old_mean + ((r-old_mean)/visits)
     return new_mean
 
-class DCLF(rl_agent.AbstractAgent):
+class UCB(rl_agent.AbstractAgent):
     """Tabular Q-Learning agent.
 
     See open_spiel/python/examples/tic_tac_toe_qlearner.py for an usage example.
@@ -249,112 +245,12 @@ class DCLF(rl_agent.AbstractAgent):
         self._N = {}
 
 
-class LUGLUCBLightGBM(DCLF):
-
-    def get_model_qs(self, state_features, legal_actions):
-
-
-        feature_actions = [list(state_features) + [a] for a in legal_actions]
-        #print(feature_actions)
-        q_values = self.model.predict(feature_actions)
-        #print(q_values.shape)
-
-        return q_values
+class LUGLUCBLightGBM(UCB):
+    get_model_qs = LUGLLightGBM.get_model_qs
+    train_supervised = LUGLLightGBM.train_supervised
 
 
-
-
-
-    def train_supervised(self):
-
-        print("About to start training")
-        all_features = []
-        all_Qs = []
-
-        # make targets!
-        #for self
-
-        for (state, action), Q in self._tbr.items():
-            #for action, Q in enumerate(self._q_values[state]):
-                all_features.append(list(state) + [action])
-                all_Qs.append(Q)
-
-        X = np.array(all_features)
-        y = np.array(all_Qs)
-
-        print(X.shape, y.shape)
-        from lightgbm.sklearn import LGBMRegressor
-        clf = LGBMRegressor(n_jobs=6, n_estimators=1000)
-        clf.fit(X, y, categorical_feature=[X.shape[1]-1])
-        self.model = clf
-        mse = metrics.mean_squared_error(y, self.model.predict(X))
-        r2 = metrics.explained_variance_score(y, self.model.predict(X))
-
-        print(mse, r2)
-
-
-
-
-class LUGLUCBDecisionTree(LUGLUCBLightGBM):
-
-
-
-
-    def get_model_qs(self, state_features, legal_actions):
-
-
-        q_values = [self.model[a].predict(np.array(state_features)[np.newaxis, :])[0]
-                    for a in legal_actions]
-        return q_values
-
-
-    def train_supervised(self):
-
-        print("About to start training")
-
-
-        data_per_action = [[] for _ in range(self._num_actions)]
-        Qs_per_action = [[] for _ in range(self._num_actions)]
-
-
-        # make targets!
-        for state in self._q_values.keys():
-            for action, Q in enumerate(self._q_values[state]):
-                data_per_action[action].append(state)
-                Qs_per_action[action].append(Q)
-
-        self.model = []
-        total = 0
-        for action in range(len(data_per_action)):
-            X = np.array(data_per_action[action])
-            y = np.array(Qs_per_action[action])
-            total += X.shape[0]
-            print(X.shape, y.shape)
-            if (X.shape[0] > 10):
-                from sklearn.model_selection import train_test_split
-                # X_train, X_test, y_train, y_test = train_test_split(X, y,
-                #                                                     random_state=0)
-
-                from sklearn.tree import DecisionTreeRegressor, \
-                    DecisionTreeClassifier
-                from sklearn.metrics import mean_squared_error
-                from sklearn.ensemble import ExtraTreesRegressor
-                # model = linear_model.LinearRegression()
-                from sklearn.model_selection import GridSearchCV
-                # ex = ExtraTreesRegressor(n_estimators=100, n_jobs=100, bootstrap=True)
-                # ex.fit(X,y)
-
-                dt = DecisionTreeRegressor(max_depth=3)
-
-                dt.fit(X, y)
-                model = dt
-
-                mse = metrics.mean_squared_error(y, model.predict(X))
-                r2 = metrics.explained_variance_score(y, model.predict(X))
-                print(mse, r2)
-                self.model.append(model)
-            else:
-                self.model.append(None)
-
-        print("Total", total)
+class LUGLUCBDecisionTree(UCB):
+    get_model_qs = LUGLDecisionTree.get_model_qs
+    train_supervised = LUGLDecisionTree.train_supervised
 

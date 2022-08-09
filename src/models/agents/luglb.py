@@ -1,16 +1,13 @@
-import collections
 import numpy as np
 
 from open_spiel.python import rl_agent
 from open_spiel.python import rl_tools
 from sklearn import metrics
-from category_encoders import TargetEncoder
-from sklearn import linear_model
-from copy import deepcopy
-from tqdm import tqdm
-from open_spiel.python.algorithms.dqn import ReplayBuffer
-from river.tree import HoeffdingAdaptiveTreeRegressor, \
-        HoeffdingTreeRegressor
+from agents.utils import ReplayBuffer
+from numba import njit
+from numba.core import types
+from numba.typed import Dict
+
 
 
 class DCLF(rl_agent.AbstractAgent):
@@ -45,9 +42,11 @@ class DCLF(rl_agent.AbstractAgent):
         self.episode_length = 0
         self.model = None
         self.maximum_size = int(1e5)
-        self._buffer = ReplayBuffer(self.maximum_size)
         self.batch_size = 32
-        self._tbr = {}
+        self.state_representation_size = state_representation_size
+
+        self._reset_dict()
+
 
 
 
@@ -63,10 +62,10 @@ class DCLF(rl_agent.AbstractAgent):
         self._buffer = ReplayBuffer(self.maximum_size)
         self._q_values = {}
         self._tbr = {}
-
-
     def get_state_action(self, info_state, action):
         return (tuple(info_state), tuple([action]))
+
+
 
 
     def _epsilon_greedy(self, info_state, legal_actions, epsilon):
@@ -85,7 +84,7 @@ class DCLF(rl_agent.AbstractAgent):
 
         # q_values[info_state][a]  transformed to q_values[tuple(info_state) + tuple(a)]
         probs = np.zeros(self._num_actions)
-
+        #info_state = np.array(info_state, dtype= "i8")
         if (info_state not in self._q_values):
             self._q_values[info_state] = np.random.random(
                 size=self._num_actions) * 0.0001
@@ -186,6 +185,7 @@ class DCLF(rl_agent.AbstractAgent):
             self._prev_action = action
         return rl_agent.StepOutput(action=action, probs=probs)
 
+
     def update(self):
         if (len(self._buffer) > self.batch_size):
             for (
@@ -200,9 +200,6 @@ class DCLF(rl_agent.AbstractAgent):
                             l_legal_actions]
 
                     target += self._discount_factor * max(feature_qs)
-
-                # print(target, prev_q_value)
-
 
                 prev_q_value = self._q_values[prev_info_state][prev_action]
                 loss = target - prev_q_value
@@ -221,9 +218,11 @@ class DCLF(rl_agent.AbstractAgent):
 
     def _reset_dict(self):
         #pass
+
         self._q_values = {}
         self._buffer = ReplayBuffer(self.maximum_size)
         self._tbr = {}
+
 
 
 class LUGLLightGBM(DCLF):
@@ -271,66 +270,62 @@ class LUGLLightGBM(DCLF):
 
 
 
-
-class LUGLDecisionTree(LUGLLightGBM):
-
-
-
+class LUGLDecisionTree(DCLF):
 
     def get_model_qs(self, state_features, legal_actions):
 
 
-        q_values = [self.model[a].predict(np.array(state_features)[np.newaxis, :])[0]
-                    for a in legal_actions]
+        feature_actions = [list(state_features) + [a] for a in legal_actions]
+        #print(feature_actions)
+        q_values = self.model.predict(feature_actions)
+        #print(q_values.shape)
+
         return q_values
+
 
 
     def train_supervised(self):
 
         print("About to start training")
-
-
-        data_per_action = [[] for _ in range(self._num_actions)]
-        Qs_per_action = [[] for _ in range(self._num_actions)]
-
+        all_features = []
+        all_Qs = []
 
         # make targets!
-        for state in self._q_values.keys():
-            for action, Q in enumerate(self._q_values[state]):
-                data_per_action[action].append(state)
-                Qs_per_action[action].append(Q)
+        #for self
 
-        self.model = []
-        total = 0
-        for action in range(len(data_per_action)):
-            X = np.array(data_per_action[action])
-            y = np.array(Qs_per_action[action])
-            total += X.shape[0]
-            print(X.shape, y.shape)
-            if (X.shape[0] > 10):
-                from sklearn.model_selection import train_test_split
-                # X_train, X_test, y_train, y_test = train_test_split(X, y,
-                #                                                     random_state=0)
+        for (state, action), Q in self._tbr.items():
+            #for action, Q in enumerate(self._q_values[state]):
+                all_features.append(list(state) + [action])
+                all_Qs.append(Q)
 
-                from sklearn.tree import DecisionTreeRegressor, \
-                    DecisionTreeClassifier
-                from sklearn.metrics import mean_squared_error
-                from sklearn.ensemble import ExtraTreesRegressor
-                # model = linear_model.LinearRegression()
-                # ex = ExtraTreesRegressor(n_estimators=100, n_jobs=100, bootstrap=True)
-                # ex.fit(X,y)
+        X = np.array(all_features)
+        y = np.array(all_Qs)
 
-                dt = DecisionTreeRegressor(max_depth=3)
+        from sklearn.preprocessing import OneHotEncoder
+        from sklearn.pipeline import Pipeline
+        from sklearn.tree import DecisionTreeRegressor
+        from category_encoders import TargetEncoder
 
-                dt.fit(X, y)
-                model = dt
+        from lightgbm.sklearn import LGBMRegressor
+        # clf  = Pipeline([('scaler', TargetEncoder(cols = [len(X.T)-1])),
+        #                  ('clf', LGBMRegressor(n_jobs = 6, n_estimators=1000))])
 
-                mse = metrics.mean_squared_error(y, model.predict(X))
-                r2 = metrics.explained_variance_score(y, model.predict(X))
-                print(mse, r2)
-                self.model.append(model)
-            else:
-                self.model.append(None)
+        from xgboost import XGBRegressor
+        f_weights = np.zeros(shape = X.shape[1])
+        f_weights[-1] = 1000
+        clf  = Pipeline([('scaler', TargetEncoder(cols = [len(X.T)-1])),
+                          ('clf', XGBRegressor(n_jobs = 6, n_estimators = 100 ))])
 
-        print("Total", total)
+        #clf = LGBMRegressor(n_jobs = 6, n_estimators=1, max_depth=2)
+        clf.fit(X,y)
+        #clf.fit(X,y,clf__feature_weights = f_weights)
+        print(X.shape, y.shape)
+        from lightgbm.sklearn import LGBMRegressor
+        #clf = LGBMRegressor(n_jobs=6, n_estimators=1)
+        #clf.fit(X, y, categorical_feature=[X.shape[1]-1])
+        self.model = clf
+        mse = metrics.mean_squared_error(y, self.model.predict(X))
+        r2 = metrics.explained_variance_score(y, self.model.predict(X))
+
+        print(mse, r2)
 
