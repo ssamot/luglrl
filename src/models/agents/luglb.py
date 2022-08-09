@@ -273,7 +273,7 @@ class LUGLLightGBM(DCLF):
 
 
 
-class LUGBDecisionTree(LUGLLightGBM):
+class LUGLDecisionTree(LUGLLightGBM):
 
 
 
