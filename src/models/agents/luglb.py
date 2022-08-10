@@ -4,9 +4,6 @@ from open_spiel.python import rl_agent
 from open_spiel.python import rl_tools
 from sklearn import metrics
 from agents.utils import ReplayBuffer
-from numba import njit
-from numba.core import types
-from numba.typed import Dict
 
 
 
@@ -313,8 +310,11 @@ class LUGLDecisionTree(DCLF):
         from xgboost import XGBRegressor
         f_weights = np.zeros(shape = X.shape[1])
         f_weights[-1] = 1000
-        clf  = Pipeline([('scaler', TargetEncoder(cols = [len(X.T)-1])),
-                          ('clf', XGBRegressor(n_jobs = 6, n_estimators = 100 ))])
+        # clf  = Pipeline([('scaler', TargetEncoder(cols = [len(X.T)-1])),
+        #                   ('clf', XGBRegressor(n_jobs = 6, n_estimators = 100 ))])
+
+        clf = Pipeline([('scaler', TargetEncoder(cols=[len(X.T) - 1])),
+                        ('clf', DecisionTreeRegressor(max_depth=3))])
 
         #clf = LGBMRegressor(n_jobs = 6, n_estimators=1, max_depth=2)
         clf.fit(X,y)

@@ -9,16 +9,13 @@ from agents.utils import ReplayBuffer
 
 
 def child_U(all_childs):
-    C = 1
+    C = 0.01
     parent_visits = np.sum(all_childs)
     all_U = np.array([C* np.sqrt(np.log(parent_visits)/child_visits)
              for child_visits in all_childs])
     return all_U
 
 
-def Q_MC(r, old_mean, visits):
-    new_mean = old_mean + ((r-old_mean)/visits)
-    return new_mean
 
 class UCB(rl_agent.AbstractAgent):
     """Tabular Q-Learning agent.
@@ -107,7 +104,7 @@ class UCB(rl_agent.AbstractAgent):
 
         if (not is_evaluation):
             child_visits = self._N[info_state][legal_actions]
-            #print(legal_actions, child_visits)
+            #print(child_visits)
             all_Us = child_U(child_visits)
             #print(all_Us, "sdfsdfsdffds")
             greedy_q = np.argmax(q_values +all_Us)
@@ -179,7 +176,7 @@ class UCB(rl_agent.AbstractAgent):
             self._tbr[(self._prev_info_state, self._prev_action)] = \
             self._q_values[self._prev_info_state][self._prev_action]
 
-            self.update()
+            #self.update()
 
 
 
@@ -210,7 +207,7 @@ class UCB(rl_agent.AbstractAgent):
                     prev_info_state, prev_action, l_info_state, l_legal_actions,
                     rewards,
                     last) in self._buffer.sample(self.batch_size):
-                target = rewards
+                target = (rewards + 1) / 2.0
 
                 if (not last):
 
