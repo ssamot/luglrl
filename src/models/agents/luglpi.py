@@ -47,7 +47,7 @@ class DCLF(rl_agent.AbstractAgent):
                  player_id,
                  state_representation_size,  ## ignored
                  num_actions,
-                 #step_size=0.1,
+                 step_size=0.1,
                  epsilon_schedule=rl_tools.ConstantSchedule(0.1),
                  discount_factor=1.0,
                  centralized=False,
@@ -56,7 +56,7 @@ class DCLF(rl_agent.AbstractAgent):
         """Initialize the Q-Learning agent."""
         self._player_id = player_id
         self._num_actions = num_actions
-        #self._step_size = step_size
+        self._step_size = step_size
         self._epsilon_schedule = epsilon_schedule
         self._epsilon = epsilon_schedule.value
         self._discount_factor = discount_factor
@@ -171,11 +171,9 @@ class DCLF(rl_agent.AbstractAgent):
         # Learn step: don't learn during evaluation or at first agent steps.
         if self._prev_info_state and not is_evaluation:
             # # print("training")
-            rewards = time_step.rewards[self._player_id]
-            #print(self._prev_action, rewards)
-
-            target = rewards
-
+           
+            target = time_step.rewards[self._player_id]
+            #
             if (not time_step.last()):
                 feature_qs = self._q_values[info_state][
                     legal_actions]
@@ -184,14 +182,14 @@ class DCLF(rl_agent.AbstractAgent):
 
             # print(target, prev_q_value)
 
-            # prev_q_value = self._q_values[self._prev_info_state][self._prev_action]
-            # loss = target - prev_q_value
-            #
-            # self._q_values[self._prev_info_state][self._prev_action] += (
-            #         self._step_size * loss)
-            #
-            # self._tbr[(self._prev_info_state, self._prev_action)] = \
-            # self._q_values[self._prev_info_state][self._prev_action]
+            prev_q_value = self._q_values[self._prev_info_state][self._prev_action]
+            loss = target - prev_q_value
+
+            self._q_values[self._prev_info_state][self._prev_action] += (
+                    self._step_size * loss)
+
+            self._tbr[(self._prev_info_state, self._prev_action)] = \
+            self._q_values[self._prev_info_state][self._prev_action]
 
 
             if (self._prev_info_state not in self._buffer):
