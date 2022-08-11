@@ -1,5 +1,5 @@
-agents.luglpi.LUGLPILightGBM
 agents.luglb.LUGLBLightGBM
+agents.luglpi.LUGLPILightGBM
 agents.luglpi.LUGLPIDecisionTree
 agents.luglb.LUGLBDecisionTree
 agents.dqn.DQN

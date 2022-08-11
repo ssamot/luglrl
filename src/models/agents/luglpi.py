@@ -4,11 +4,11 @@ from open_spiel.python import rl_agent
 from open_spiel.python import rl_tools
 from sklearn import metrics
 from tqdm import tqdm
-from agents.utils import LimitedSizeDict
+from collections import OrderedDict
 
 
 
-def init_replay(buffer, tbr,  discount_factor, q_values, num_actions):
+def init_replay(obj, buffer, tbr,  discount_factor, q_values, num_actions):
     mean_loss = []
 
     for prev_state in tqdm(buffer.keys()):
@@ -19,7 +19,10 @@ def init_replay(buffer, tbr,  discount_factor, q_values, num_actions):
                 for infostate, legal_actions, r, t in buffer[prev_state][action]:
                     target = r
                     if not t:  # Q values are zero for terminal.
-                        x = [q_values[infostate][a] for a in legal_actions]
+                        if(infostate in q_values):
+                            x = [q_values[infostate][a] for a in legal_actions]
+                        else:
+                            x = obj.get_model_qs(infostate, legal_actions)
 
                         target += discount_factor * np.max(
                             x)
@@ -74,6 +77,7 @@ class DCLF(rl_agent.AbstractAgent):
         self.state_representation_size = state_representation_size
 
         self.__reset_dict()
+
 
 
 
@@ -135,7 +139,7 @@ class DCLF(rl_agent.AbstractAgent):
     def replay(self):
         cloned_q = (self._q_values)
         for _ in range(1):
-            loss = init_replay(self._buffer, self._tbr, self._discount_factor,
+            loss = init_replay(self, self._buffer, self._tbr, self._discount_factor,
                                cloned_q, self._num_actions)
             print("Replay loss", loss)
             if(loss == 0.0):
@@ -238,17 +242,18 @@ class DCLF(rl_agent.AbstractAgent):
     def __reset_dict(self):
         #pass
 
-        self._q_values = LimitedSizeDict(size_limit=int(1e5))
-        self._buffer = LimitedSizeDict(size_limit=int(1e5))
-        self._tbr = LimitedSizeDict(size_limit=int(1e5))
+        self._q_values = OrderedDict()
+        self._buffer = OrderedDict()
+        self._tbr = OrderedDict()
         self._visits = {}
 
     def _reset_dict(self):
-        #pass
-
-        #self._q_values = {}
-        #self._buffer = {}
-        #self._tbr = {}
+        while len(self._q_values) > self.maximum_size:
+            key,_ =  self._q_values.popitem(last=False)
+            if(key in self._buffer ):
+                del self._buffer[key]
+            if(key in self._tbr):
+                del self._tbr[key]
         self._visits = {}
 
 

@@ -5,7 +5,7 @@ from open_spiel.python import rl_tools
 from sklearn import metrics
 from agents.utils import ReplayBuffer
 from agents.utils import LimitedSizeDict
-
+from collections import OrderedDict
 
 
 class DCLF(rl_agent.AbstractAgent):
@@ -39,12 +39,12 @@ class DCLF(rl_agent.AbstractAgent):
         self._n_games = 0
         self.episode_length = 0
         self.model = None
-        self.maximum_size = int(1e5)
+        self.maximum_size = int(1e2)
         self.batch_size = 32
         self.state_representation_size = state_representation_size
         self._buffer = ReplayBuffer(self.maximum_size)
-        self._q_values = LimitedSizeDict(size_limit=int(1e5))
-        self._tbr = LimitedSizeDict(size_limit=int(1e5))
+        self._q_values = OrderedDict()
+        self._tbr = OrderedDict()
 
         self._reset_dict()
 
@@ -218,7 +218,35 @@ class DCLF(rl_agent.AbstractAgent):
 
 
     def _reset_dict(self):
-        pass
+
+        buffer_states = {}
+
+        for i,(
+                prev_info_state, prev_action, l_info_state, l_legal_actions,
+                rewards,
+                last) in enumerate(self._buffer._data):
+
+            buffer_states.append(prev_info_state)
+            buffer_states.append(l_info_state)
+
+        buffer_states = set(buffer_states)
+
+        for key in self._q_values.keys():
+
+            if(len(self._q_values) > self.maximum_size):
+                if(key not in buffer_states):
+                    if(key in self._tbr):
+                        del self._tbr[key]
+                    if(key in self._q_values):
+                        del self._q_values[key]
+            else:
+                break
+
+
+
+
+
+
         #self._q_values = {}
 
 
