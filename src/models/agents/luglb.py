@@ -4,6 +4,7 @@ from open_spiel.python import rl_agent
 from open_spiel.python import rl_tools
 from sklearn import metrics
 from agents.utils import ReplayBuffer
+from agents.utils import LimitedSizeDict
 
 
 
@@ -41,6 +42,9 @@ class DCLF(rl_agent.AbstractAgent):
         self.maximum_size = int(1e5)
         self.batch_size = 32
         self.state_representation_size = state_representation_size
+        self._buffer = ReplayBuffer(self.maximum_size)
+        self._q_values = LimitedSizeDict(size_limit=int(1e5))
+        self._tbr = LimitedSizeDict(size_limit=int(1e5))
 
         self._reset_dict()
 
@@ -214,11 +218,9 @@ class DCLF(rl_agent.AbstractAgent):
 
 
     def _reset_dict(self):
-        #pass
+        pass
+        #self._q_values = {}
 
-        self._q_values = {}
-        self._buffer = ReplayBuffer(self.maximum_size)
-        self._tbr = {}
 
 
 

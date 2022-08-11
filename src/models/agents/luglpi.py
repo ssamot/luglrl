@@ -3,8 +3,9 @@ import numpy as np
 from open_spiel.python import rl_agent
 from open_spiel.python import rl_tools
 from sklearn import metrics
-from agents.utils import ReplayBuffer
 from tqdm import tqdm
+from agents.utils import LimitedSizeDict
+
 
 
 def init_replay(buffer, tbr,  discount_factor, q_values, num_actions):
@@ -72,7 +73,7 @@ class DCLF(rl_agent.AbstractAgent):
         self.batch_size = 32
         self.state_representation_size = state_representation_size
 
-        self._reset_dict()
+        self.__reset_dict()
 
 
 
@@ -86,7 +87,7 @@ class DCLF(rl_agent.AbstractAgent):
 
     def __setstate__(self, state):
         self.__dict__ = state
-        self._reset_dict()
+        self.__reset_dict()
 
     def get_state_action(self, info_state, action):
         return (tuple(info_state), tuple([action]))
@@ -234,12 +235,20 @@ class DCLF(rl_agent.AbstractAgent):
         return self._last_loss_value
 
 
+    def __reset_dict(self):
+        #pass
+
+        self._q_values = LimitedSizeDict(size_limit=int(1e5))
+        self._buffer = LimitedSizeDict(size_limit=int(1e5))
+        self._tbr = LimitedSizeDict(size_limit=int(1e5))
+        self._visits = {}
+
     def _reset_dict(self):
         #pass
 
-        self._q_values = {}
-        self._buffer = {}
-        self._tbr = {}
+        #self._q_values = {}
+        #self._buffer = {}
+        #self._tbr = {}
         self._visits = {}
 
 
