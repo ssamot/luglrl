@@ -35,7 +35,7 @@ class DQN():
                 player_id=player_id,
                 state_representation_size=state_representation_size,
                 num_actions=num_actions,
-                hidden_layers_sizes=[state_representation_size],
+                hidden_layers_sizes=[3*state_representation_size,3*state_representation_size],
                 replay_buffer_capacity=int(1e5),
                 batch_size=32)
             self.agent._savers = [

@@ -39,7 +39,7 @@ class DCLF(rl_agent.AbstractAgent):
         self._n_games = 0
         self.episode_length = 0
         self.model = None
-        self.maximum_size = int(1e2)
+        self.maximum_size = int(1e5)
         self.batch_size = 32
         self.state_representation_size = state_representation_size
         self._buffer = ReplayBuffer(self.maximum_size)
@@ -159,8 +159,7 @@ class DCLF(rl_agent.AbstractAgent):
             self._q_values[self._prev_info_state][self._prev_action] += (
                     self._step_size * loss)
 
-            self._tbr[(self._prev_info_state, self._prev_action)] = \
-            self._q_values[self._prev_info_state][self._prev_action]
+            self._tbr[(self._prev_info_state, self._prev_action)] = target
 
             self.update()
 
@@ -208,8 +207,7 @@ class DCLF(rl_agent.AbstractAgent):
                 self._q_values[prev_info_state][prev_action] += (
                         self._step_size * loss)
 
-                self._tbr[(prev_info_state, prev_action)] = \
-                    self._q_values[prev_info_state][prev_action]
+                self._tbr[(prev_info_state, prev_action)] = target
                 # print(loss, target, self._q_values[prev_info_state][prev_action])
 
     @property
@@ -219,7 +217,7 @@ class DCLF(rl_agent.AbstractAgent):
 
     def _reset_dict(self):
 
-        buffer_states = {}
+        buffer_states = []
 
         for i,(
                 prev_info_state, prev_action, l_info_state, l_legal_actions,
@@ -231,14 +229,17 @@ class DCLF(rl_agent.AbstractAgent):
 
         buffer_states = set(buffer_states)
 
-        for key in self._q_values.keys():
+        for key in self._q_values.copy().keys():
 
             if(len(self._q_values) > self.maximum_size):
                 if(key not in buffer_states):
-                    if(key in self._tbr):
-                        del self._tbr[key]
+                    for action in range(self._num_actions):
+                        if((key,action) in self._tbr):
+                            del self._tbr[(key,action)]
                     if(key in self._q_values):
+                        #print("deleting")
                         del self._q_values[key]
+                        #print(len(self._q_values))
             else:
                 break
 
@@ -295,19 +296,17 @@ class LUGLBLightGBM(DCLF):
 
         print(mse, r2)
 
-
-
 class LUGLBDecisionTree(DCLF):
 
     def get_model_qs(self, state_features, legal_actions):
 
 
-        feature_actions = [list(state_features) + [a] for a in legal_actions]
+        feature_actions = [list(state_features)]
         #print(feature_actions)
         q_values = self.model.predict(feature_actions)
         #print(q_values.shape)
 
-        return q_values
+        return q_values[0][legal_actions]
 
 
 
@@ -322,30 +321,37 @@ class LUGLBDecisionTree(DCLF):
 
         for (state, action), Q in self._tbr.items():
             #for action, Q in enumerate(self._q_values[state]):
-                all_features.append(list(state) + [action])
-                all_Qs.append(Q)
+                all_features.append(list(state))
+                Qs = [np.nan for _ in (range(self._num_actions))]
+                Qs[action] = Q
+                all_Qs.append(Qs)
+
+        # for state, Qs in self._q_values.items():
+        #     all_features.append(list(state))
+        #     all_Qs.append(Qs)
 
         X = np.array(all_features)
         y = np.array(all_Qs)
+        from sklearn.impute import SimpleImputer
+        imp = SimpleImputer()
+        y = imp.fit_transform(y)
+        #print(X.shape, y.shape)
 
         from sklearn.preprocessing import OneHotEncoder
         from sklearn.pipeline import Pipeline
         from sklearn.tree import DecisionTreeRegressor
-        from category_encoders import TargetEncoder
+        from sklearn.ensemble import HistGradientBoostingRegressor
+        #from category_encoders import TargetEncoder
 
         from lightgbm.sklearn import LGBMRegressor
+        #from sklearn.ensemble import RandomForestRegressor
         # clf  = Pipeline([('scaler', TargetEncoder(cols = [len(X.T)-1])),
         #                  ('clf', LGBMRegressor(n_jobs = 6, n_estimators=1000))])
 
-        from xgboost import XGBRegressor
-        f_weights = np.zeros(shape = X.shape[1])
-        f_weights[-1] = 1000
-        # clf  = Pipeline([('scaler', TargetEncoder(cols = [len(X.T)-1])),
-        #                   ('clf', XGBRegressor(n_jobs = 6, n_estimators = 100 ))])
-
-        clf = Pipeline([('scaler', TargetEncoder(cols=[len(X.T) - 1])),
-                        ('clf', DecisionTreeRegressor(max_depth=3))])
-
+        #from xgboost import XGBRegressor
+        clf = DecisionTreeRegressor(min_samples_split=3)
+        #clf = HistGradientBoostingRegressor()
+        #clf = RandomForestRegressor(n_jobs=4)
         #clf = LGBMRegressor(n_jobs = 6, n_estimators=1, max_depth=2)
         clf.fit(X,y)
         #clf.fit(X,y,clf__feature_weights = f_weights)
@@ -358,4 +364,3 @@ class LUGLBDecisionTree(DCLF):
         r2 = metrics.explained_variance_score(y, self.model.predict(X))
 
         print(mse, r2)
-

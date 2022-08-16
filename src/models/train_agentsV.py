@@ -24,10 +24,11 @@ import importlib
 from utils import evaluate
 from copy import deepcopy
 from utils import evaluate, bcolors
-from open_spiel.python.algorithms import random_agent
+#from open_spiel.python.algorithms import random_agent
 from scipy.stats import ttest_1samp
 from visualization.calculate_glicko2_scores import calculate_glicko_scores
 from run_tournament import run_tournament
+from agents import random_agent
 
 @click.command()
 @click.argument('game_name', type = click.STRING)
@@ -83,21 +84,21 @@ def main(game_name, agent_class, comparison_point,  training_episodes):
 
                     archive[current_agent] = deepcopy(agents)
 
-                    # df = run_tournament(game_name, len(archive)*30, archive)
-                    # glicko_df = calculate_glicko_scores(df)
-                    # glicko_df = glicko_df.sort_values(by=['glicko2'])
-                    # is_latest_best = (glicko_df.iloc[-1][
-                    #                       "n_games"] == cur_episode)
-                    #
-                    # if(is_latest_best):
-                    #     best = glicko_df.iloc[-1]
-                    #     second_best = glicko_df.iloc[-2]
-                    #     if(best["glicko2_lower"] > second_best["glicko2_upper"] ):
-                    #         print("Confidently best", best["glicko2_lower"], second_best["glicko2_upper"])
-                    #     else:
-                    #         is_latest_best = False
+                    df = run_tournament(game_name, len(archive)*30, archive)
+                    glicko_df = calculate_glicko_scores(df)
+                    glicko_df = glicko_df.sort_values(by=['glicko2'])
+                    is_latest_best = (glicko_df.iloc[-1][
+                                          "n_games"] == cur_episode)
 
-                    is_latest_best = True
+                    if(is_latest_best):
+                        best = glicko_df.iloc[-1]
+                        second_best = glicko_df.iloc[-2]
+                        if(best["glicko2_lower"] > second_best["glicko2_upper"] ):
+                            print("Confidently best", best["glicko2_lower"], second_best["glicko2_upper"])
+                        else:
+                            is_latest_best = False
+
+
                     if(is_latest_best):
                         print(bcolors.OKGREEN + f"Latest agent is elite" + bcolors.ENDC)
                         for agent in agents:
@@ -120,16 +121,15 @@ def main(game_name, agent_class, comparison_point,  training_episodes):
 
 
             time_step = env.reset()
+
             while not time_step.last():
                 player_id = time_step.observations["current_player"]
-                agents[player_id].state = env.get_state
-                agent_output = agents[player_id].step(time_step)
+                agent_output = agents[player_id].step([time_step, env.get_state])
                 time_step = env.step([agent_output.action])
 
             # Episode is over, step all games with final info state.
             for agent in agents:
-                agent.state = env.get_state
-                agent.step(time_step)
+                agent.step([time_step, env.get_state])
 
 
 

@@ -15,6 +15,7 @@ def evaluate(env, agent_1, agent_2, num_episodes, epsilon = 0.0):
                 player_id = time_step.observations["current_player"]
                 legal_actions = time_step.observations["legal_actions"][player_id]
 
+                cur_agents[player_id].state = env.get_state
                 agent_output = cur_agents[player_id].step(time_step,
                                                           is_evaluation=True)
                 action = agent_output.action

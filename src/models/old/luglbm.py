@@ -3,43 +3,9 @@ import numpy as np
 from open_spiel.python import rl_agent
 from open_spiel.python import rl_tools
 from sklearn import metrics
-from tqdm import tqdm
+from agents.utils import ReplayBuffer
+from agents.utils import LimitedSizeDict
 from collections import OrderedDict
-from copy import deepcopy
-
-
-
-def init_replay(obj, buffer, tbr,  discount_factor, q_values, num_actions):
-    mean_loss = []
-
-    for prev_state in tqdm(buffer.keys()):
-
-        for action in range(num_actions):
-            all_targets = []
-            if(len(buffer[prev_state][action]) > 0):
-                for infostate, legal_actions, r, t in buffer[prev_state][action]:
-                    target = r
-                    if not t:  # Q values are zero for terminal.
-                        if(infostate in q_values):
-                            x = [q_values[infostate][a] for a in legal_actions]
-                        else:
-                            x = obj.get_model_qs(infostate, legal_actions)
-
-                        target += discount_factor * np.max(
-                            x)
-                    #print(target,r)
-                    all_targets.append(target)
-
-                target = np.mean(all_targets)
-                # print(len(all_targets))
-                prev_q_value = q_values[prev_state][action]
-                loss = target - prev_q_value
-                # print(loss)
-                q_values[prev_state][action] = target
-                tbr[(prev_state, action)] = target
-                mean_loss.append(loss)
-
-    return np.mean(mean_loss)
 
 
 class DCLF(rl_agent.AbstractAgent):
@@ -76,9 +42,11 @@ class DCLF(rl_agent.AbstractAgent):
         self.maximum_size = int(1e5)
         self.batch_size = 32
         self.state_representation_size = state_representation_size
+        self._buffer = ReplayBuffer(self.maximum_size)
+        self._q_values = OrderedDict()
+        self._tbr = OrderedDict()
 
-        self.__reset_dict()
-
+        self._reset_dict()
 
 
 
@@ -92,8 +60,9 @@ class DCLF(rl_agent.AbstractAgent):
 
     def __setstate__(self, state):
         self.__dict__ = state
-        self.__reset_dict()
-
+        self._buffer = ReplayBuffer(self.maximum_size)
+        self._q_values = {}
+        self._tbr = {}
     def get_state_action(self, info_state, action):
         return (tuple(info_state), tuple([action]))
 
@@ -137,18 +106,7 @@ class DCLF(rl_agent.AbstractAgent):
         return action, probs
 
 
-    def replay(self):
-        cloned_q = deepcopy(self._q_values)
-        for _ in range(1):
-            loss = init_replay(self, self._buffer, self._tbr, self._discount_factor,
-                               cloned_q, self._num_actions)
-            print("Replay loss", loss)
-            if(loss == 0.0):
-                break;
-
-        return cloned_q
-
-    def step(self, time_step, is_evaluation=False):
+    def step(self, time_step,  is_evaluation=False):
         """Returns the action to be taken and updates the Q-values if needed.
 
         Args:
@@ -158,6 +116,9 @@ class DCLF(rl_agent.AbstractAgent):
         Returns:
           A `rl_agent.StepOutput` containing the action probs and chosen action.
         """
+        #print(time_step)
+        #exit()
+        #print(time_step)
         if self._centralized:
             info_state = tuple(time_step.observations["info_state"])
         else:
@@ -168,7 +129,12 @@ class DCLF(rl_agent.AbstractAgent):
         # Prevent undefined errors if this agent never plays until terminal step
         action, probs = None, None
 
+
+
+        #print(l)
+        #exit()
         # Act step: don't act at terminal states.
+        #print(len(l))
         if not time_step.last():
             epsilon = 0.0 if is_evaluation else self._epsilon
             action, probs = self._epsilon_greedy(
@@ -177,9 +143,16 @@ class DCLF(rl_agent.AbstractAgent):
         # Learn step: don't learn during evaluation or at first agent steps.
         if self._prev_info_state and not is_evaluation:
             # # print("training")
-           
-            target = time_step.rewards[self._player_id]
-            #
+            rewards = time_step.rewards[self._player_id]
+            #print(self._prev_action, rewards)
+
+            self._buffer.add([self._prev_info_state, self._prev_action,
+                              info_state,
+                              legal_actions, rewards, time_step.last()])
+
+
+            target = rewards
+
             if (not time_step.last()):
                 feature_qs = self._q_values[info_state][
                     legal_actions]
@@ -197,19 +170,7 @@ class DCLF(rl_agent.AbstractAgent):
             self._tbr[(self._prev_info_state, self._prev_action)] = \
             self._q_values[self._prev_info_state][self._prev_action]
 
-
-            if (self._prev_info_state not in self._buffer):
-                self._buffer[self._prev_info_state] = [[] for _ in range(self._num_actions)]
-
-
-            self._buffer[self._prev_info_state][self._prev_action].append([
-                info_state, legal_actions,
-                time_step.rewards[self._player_id],
-                time_step.last()
-            ])
-
-
-            #self.update()
+            self.update()
 
 
 
@@ -234,33 +195,75 @@ class DCLF(rl_agent.AbstractAgent):
         return rl_agent.StepOutput(action=action, probs=probs)
 
 
+    def update(self):
+        if (len(self._buffer) > self.batch_size):
+            for (
+                    prev_info_state, prev_action, l_info_state, l_legal_actions,
+                    rewards,
+                    last) in self._buffer.sample(self.batch_size):
+                target = rewards
+
+                if (not last):
+
+                    feature_qs = self._q_values[l_info_state][
+                            l_legal_actions]
+
+                    target += self._discount_factor * max(feature_qs)
+
+                prev_q_value = self._q_values[prev_info_state][prev_action]
+                loss = target - prev_q_value
+
+                self._q_values[prev_info_state][prev_action] += (
+                        self._step_size * loss)
+
+                self._tbr[(prev_info_state, prev_action)] = \
+                    self._q_values[prev_info_state][prev_action]
+                # print(loss, target, self._q_values[prev_info_state][prev_action])
 
     @property
     def loss(self):
         return self._last_loss_value
 
 
-    def __reset_dict(self):
-        #pass
-
-        self._q_values = OrderedDict()
-        self._buffer = OrderedDict()
-        self._tbr = OrderedDict()
-        self._visits = {}
-
     def _reset_dict(self):
-        while len(self._q_values) > self.maximum_size:
-            key,_ =  self._q_values.popitem(last=False)
-            if(key in self._buffer ):
-                del self._buffer[key]
-            for action in range(self._num_actions):
-                if ((key, action) in self._tbr):
-                    del self._tbr[(key, action)]
-        self._visits = {}
+
+        buffer_states = []
+
+        for i,(
+                prev_info_state, prev_action, l_info_state, l_legal_actions,
+                rewards,
+                last) in enumerate(self._buffer._data):
+
+            buffer_states.append(prev_info_state)
+            buffer_states.append(l_info_state)
+
+        buffer_states = set(buffer_states)
+
+        for key in self._q_values.copy().keys():
+
+            if(len(self._q_values) > self.maximum_size):
+                if(key not in buffer_states):
+                    for action in range(self._num_actions):
+                        if((key,action) in self._tbr):
+                            del self._tbr[(key,action)]
+                    if(key in self._q_values):
+                        #print("deleting")
+                        del self._q_values[key]
+                        #print(len(self._q_values))
+            else:
+                break
 
 
 
-class LUGLPILightGBM(DCLF):
+
+
+
+        #self._q_values = {}
+
+
+
+
+class LUGLBLightGBM(DCLF):
 
     def get_model_qs(self, state_features, legal_actions):
 
@@ -283,7 +286,7 @@ class LUGLPILightGBM(DCLF):
         all_Qs = []
 
         # make targets!
-        self.replay()
+        #for self
 
         for (state, action), Q in self._tbr.items():
             #for action, Q in enumerate(self._q_values[state]):
@@ -305,7 +308,7 @@ class LUGLPILightGBM(DCLF):
 
 
 
-class LUGLPIDecisionTree(DCLF):
+class LUGLBDecisionTree(DCLF):
 
     def get_model_qs(self, state_features, legal_actions):
 
@@ -358,7 +361,7 @@ class LUGLPIDecisionTree(DCLF):
         #                  ('clf', LGBMRegressor(n_jobs = 6, n_estimators=1000))])
 
         #from xgboost import XGBRegressor
-        clf = DecisionTreeRegressor()
+        clf = DecisionTreeRegressor(min_samples_split=3)
         #clf = HistGradientBoostingRegressor()
         #clf = RandomForestRegressor(n_jobs=4)
         #clf = LGBMRegressor(n_jobs = 6, n_estimators=1, max_depth=2)
