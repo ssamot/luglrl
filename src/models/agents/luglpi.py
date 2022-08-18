@@ -138,7 +138,7 @@ class DCLF(rl_agent.AbstractAgent):
 
 
     def replay(self):
-        cloned_q = deepcopy(self._q_values)
+        cloned_q = (self._q_values)
         for _ in range(1):
             loss = init_replay(self, self._buffer, self._tbr, self._discount_factor,
                                cloned_q, self._num_actions)
@@ -194,8 +194,7 @@ class DCLF(rl_agent.AbstractAgent):
             self._q_values[self._prev_info_state][self._prev_action] += (
                     self._step_size * loss)
 
-            self._tbr[(self._prev_info_state, self._prev_action)] = \
-            self._q_values[self._prev_info_state][self._prev_action]
+            self._tbr[(self._prev_info_state, self._prev_action)] = target
 
 
             if (self._prev_info_state not in self._buffer):

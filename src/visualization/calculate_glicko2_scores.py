@@ -104,18 +104,44 @@ def main(input_filepath):
 
     df = pd.read_csv(input_filepath, index_col=0)
 
-    df_results_all = calculate_glicko_scores(df)
+    df_glicko = calculate_glicko_scores(df)
+
+    # replicate random player for all possible n_games
+    random_glicko = df_glicko[df_glicko["n_games"] < 0]
+
+    df_glicko = df_glicko[df_glicko["n_games"] > 0]
+
+    n_games = set(df_glicko["n_games"])
+
+    map_results = {"n_games": [],
+                   "glicko2": [],
+                   "glicko2_upper": [],
+                   "glicko2_lower": [],
+                   "agent_name": [],
+                   }
+
+
+    for game in n_games:
+        map_results["n_games"].append(game)
+        map_results["glicko2"].append(random_glicko["glicko2"].to_numpy()[0])
+        map_results["glicko2_lower"].append(random_glicko["glicko2_lower"].to_numpy()[0])
+        map_results["glicko2_upper"].append(random_glicko["glicko2_upper"].to_numpy()[0])
+        map_results["agent_name"].append(random_glicko["agent_name"].to_numpy()[0])
+
+    df_random = pd.DataFrame(data = map_results)
+
+    df_glicko = df_glicko.append(df_random)
 
     path = Path(input_filepath).parents[0]
     name = Path(input_filepath).stem
     df_filename = f"{path}/{name}_glicko.csv"
 
 
-    df_results_all.to_csv(df_filename)
-    agent_names = list(set(df_results_all["agent_name"]))
+    df_glicko.to_csv(df_filename)
+    agent_names = list(set(df_glicko["agent_name"]))
     agent_names.sort()
     for colour, agent in enumerate(agent_names):
-        df_results = df_results_all[df_results_all["agent_name"] == agent]
+        df_results = df_glicko[df_glicko["agent_name"] == agent]
         df_results = df_results.sort_values(by=['n_games'])
 
         colour = sns.color_palette("deep")[colour]
@@ -141,9 +167,9 @@ def main(input_filepath):
     plt.legend()
     plt.ylabel("Glicko2 score")
     plt.xlabel(
-        "Number of training games (with negative games indicating uniform random player)")
+        "Number of training games")
     plt.savefig(f"reports/figures/{name}.pdf", bbox_inches='tight')
-    plt.savefig(f"reports/figures/{name}.png", bbox_inches='tight')
+    #plt.savefig(f"reports/figures/{name}.png", bbox_inches='tight')
     #plt.show()
 
 

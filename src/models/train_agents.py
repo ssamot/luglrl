@@ -83,12 +83,12 @@ def main(game_name, agent_class, comparison_point,  training_episodes):
 
                     archive[current_agent] = deepcopy(agents)
 
-                    # df = run_tournament(game_name, len(archive)*30, archive)
-                    # glicko_df = calculate_glicko_scores(df)
-                    # glicko_df = glicko_df.sort_values(by=['glicko2'])
-                    # is_latest_best = (glicko_df.iloc[-1][
-                    #                       "n_games"] == cur_episode)
-                    #
+                    df = run_tournament(game_name, len(archive)*30, archive, 0.05)
+                    glicko_df = calculate_glicko_scores(df)
+                    glicko_df = glicko_df.sort_values(by=['glicko2'])
+                    is_latest_best = (glicko_df.iloc[-1][
+                                          "n_games"] == cur_episode)
+
                     # if(is_latest_best):
                     #     best = glicko_df.iloc[-1]
                     #     second_best = glicko_df.iloc[-2]
@@ -97,7 +97,7 @@ def main(game_name, agent_class, comparison_point,  training_episodes):
                     #     else:
                     #         is_latest_best = False
 
-                    is_latest_best = True
+                    #is_latest_best = True
                     if(is_latest_best):
                         print(bcolors.OKGREEN + f"Latest agent is elite" + bcolors.ENDC)
                         for agent in agents:

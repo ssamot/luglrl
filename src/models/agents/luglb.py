@@ -296,17 +296,26 @@ class LUGLBLightGBM(DCLF):
 
         print(mse, r2)
 
+
 class LUGLBDecisionTree(DCLF):
 
     def get_model_qs(self, state_features, legal_actions):
 
 
-        feature_actions = [list(state_features)]
+        oh_action = np.zeros(shape=(len(legal_actions), self._num_actions  ))
+        #oh_action[legal_actions,list(range(self._num_actions))] = 1
+        #print(oh_action)
+        for i, a in enumerate(legal_actions): oh_action[i,a] = 1
+
+
+        feature_actions = [list(state_features) + list(a) for a in oh_action ]
         #print(feature_actions)
         q_values = self.model.predict(feature_actions)
         #print(q_values.shape)
 
-        return q_values[0][legal_actions]
+        return q_values
+
+
 
 
 
@@ -321,44 +330,19 @@ class LUGLBDecisionTree(DCLF):
 
         for (state, action), Q in self._tbr.items():
             #for action, Q in enumerate(self._q_values[state]):
-                all_features.append(list(state))
-                Qs = [np.nan for _ in (range(self._num_actions))]
-                Qs[action] = Q
-                all_Qs.append(Qs)
-
-        # for state, Qs in self._q_values.items():
-        #     all_features.append(list(state))
-        #     all_Qs.append(Qs)
+                oh_action = np.zeros(shape=self._num_actions)
+                oh_action[action] = 1
+                all_features.append(list(state) + list(oh_action))
+                all_Qs.append(Q)
 
         X = np.array(all_features)
         y = np.array(all_Qs)
-        from sklearn.impute import SimpleImputer
-        imp = SimpleImputer()
-        y = imp.fit_transform(y)
-        #print(X.shape, y.shape)
 
-        from sklearn.preprocessing import OneHotEncoder
-        from sklearn.pipeline import Pipeline
-        from sklearn.tree import DecisionTreeRegressor
-        from sklearn.ensemble import HistGradientBoostingRegressor
-        #from category_encoders import TargetEncoder
-
-        from lightgbm.sklearn import LGBMRegressor
-        #from sklearn.ensemble import RandomForestRegressor
-        # clf  = Pipeline([('scaler', TargetEncoder(cols = [len(X.T)-1])),
-        #                  ('clf', LGBMRegressor(n_jobs = 6, n_estimators=1000))])
-
-        #from xgboost import XGBRegressor
-        clf = DecisionTreeRegressor(min_samples_split=3)
-        #clf = HistGradientBoostingRegressor()
-        #clf = RandomForestRegressor(n_jobs=4)
-        #clf = LGBMRegressor(n_jobs = 6, n_estimators=1, max_depth=2)
-        clf.fit(X,y)
-        #clf.fit(X,y,clf__feature_weights = f_weights)
         print(X.shape, y.shape)
-        from lightgbm.sklearn import LGBMRegressor
-        #clf = LGBMRegressor(n_jobs=6, n_estimators=1)
-        #clf.fit(X, y, categorical_feature=[X.shape[1]-1])
+        from sklearn.tree import DecisionTreeRegressor
+
+        clf = DecisionTreeRegressor(min_samples_leaf=3)
+        clf.fit(X,y)
         self.model = clf
         mse = metrics.mean_squared_error(y, self.model.predict(X))
         r2 = metrics.explained_variance_score(y, self.model.predict(X))

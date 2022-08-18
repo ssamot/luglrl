@@ -15,7 +15,7 @@ import importlib
 
 
 
-def run_tournament(game, n_games, agents):
+def run_tournament(game, n_games, agents, epsilon = 0.0):
     map_frame = {"player_1": [], "player_2": [], "score": [], "position": []}
 
     env = rl_environment.Environment(game)
@@ -27,7 +27,7 @@ def run_tournament(game, n_games, agents):
             agent_name_2, agent_2 = random.choice(list(agents.items()))
 
         win_rates_vs_random = evaluate(env, agent_1, agent_2,
-                                       1)
+                                       1, epsilon)
 
         for pos in [0, 1]:
             for win in range(len(win_rates_vs_random[pos])):
