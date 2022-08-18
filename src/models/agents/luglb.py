@@ -295,8 +295,23 @@ class LUGLBLightGBM(DCLF):
 
         print(X.shape, y.shape)
         from lightgbm.sklearn import LGBMRegressor
-        clf = LGBMRegressor(n_jobs=6, n_estimators=1000, num_leaves=100)
-        clf.fit(X, y, categorical_feature=[X.shape[1]-1])
+        from sklearn.model_selection import train_test_split
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size = 0.10)
+        clf = LGBMRegressor(n_jobs=6,
+                            n_estimators=10000,
+                            num_leaves=200, linear_tree=True,)
+        clf.fit(X_train, y_train,
+                eval_set=[(X_test, y_test)],
+                early_stopping_rounds=100,
+                categorical_feature=[X.shape[1]-1])
+        n_estimators_ = clf.best_iteration_
+        print(f"n_estimators = {n_estimators_}")
+
+        clf = LGBMRegressor(n_jobs=6, n_estimators=n_estimators_, num_leaves=200,
+                            linear_tree=True)
+        clf.fit(X, y,
+                categorical_feature=[X.shape[1] - 1])
         self.model = clf
         mse = metrics.mean_squared_error(y, self.model.predict(X))
         r2 = metrics.explained_variance_score(y, self.model.predict(X))
