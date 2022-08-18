@@ -87,22 +87,29 @@ class DCLF(rl_agent.AbstractAgent):
         probs = np.zeros(self._num_actions)
         #info_state = np.array(info_state, dtype= "i8")
         if (info_state not in self._q_values):
-            self._q_values[info_state] = np.random.random(
-                size=self._num_actions) * 0.0001
+            self._q_values[info_state] = np.zeros(shape=self._num_actions)
 
             if(self.model is not None):
                 self._q_values[info_state][legal_actions] = self.get_model_qs(
                     info_state, legal_actions)
 
         q_values = self._q_values[info_state][legal_actions]
-        greedy_q = np.argmax(q_values)
+        #q_values += np.random.random(
+        #        size=legal_actions) * 0.0001
+        #greedy_action = np.argmax(q_values)
+        greedy_q = max(q_values)
 
-
-
+        greedy_actions = [
+            a for a in legal_actions if
+            self._q_values[info_state][a] == greedy_q
+        ]
         probs[legal_actions] = epsilon / len(legal_actions)
-        probs[legal_actions[greedy_q]] += (1 - epsilon)
-        # print(probs, np.sum(probs))
+        probs[greedy_actions] += (1 - epsilon) / len(greedy_actions)
         action = np.random.choice(range(self._num_actions), p=probs)
+
+        #print(probs)
+
+
         return action, probs
 
 
@@ -288,7 +295,7 @@ class LUGLBLightGBM(DCLF):
 
         print(X.shape, y.shape)
         from lightgbm.sklearn import LGBMRegressor
-        clf = LGBMRegressor(n_jobs=6, n_estimators=1000)
+        clf = LGBMRegressor(n_jobs=6, n_estimators=1000, num_leaves=100)
         clf.fit(X, y, categorical_feature=[X.shape[1]-1])
         self.model = clf
         mse = metrics.mean_squared_error(y, self.model.predict(X))
