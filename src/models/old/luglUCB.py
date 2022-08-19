@@ -209,7 +209,7 @@ class LUGLBaseUCB(rl_agent.AbstractAgent):
                 target = time_step.rewards[self._player_id]
                 # make between zero and one
                 target = (target + 1) / 2.0
-                self._n_games += 1
+                self._n_games += 1from agents.luglb import LUGLDecisionTree, LUGLLightGBM
                 #print(self.episode_length_mean)
                 self.episode_length_mean = Q_MC(self.episode_length, self.episode_length_mean, 1000)
                 self.episode_length = 0

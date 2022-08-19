@@ -299,19 +299,19 @@ class LUGLBLightGBM(DCLF):
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size = 0.10)
         clf = LGBMRegressor(n_jobs=6,
-                            n_estimators=10000,
-                            num_leaves=200, linear_tree=True,)
+                            n_estimators=1000,
+                            num_leaves=200, linear_tree=True,verbose = -100)
         clf.fit(X_train, y_train,
                 eval_set=[(X_test, y_test)],
                 early_stopping_rounds=100,
-                categorical_feature=[X.shape[1]-1])
+                categorical_feature=[X.shape[1]-1],verbose =False)
         n_estimators_ = clf.best_iteration_
         print(f"n_estimators = {n_estimators_}")
 
         clf = LGBMRegressor(n_jobs=6, n_estimators=n_estimators_, num_leaves=200,
-                            linear_tree=True)
+                            linear_tree=True,verbose = -100)
         clf.fit(X, y,
-                categorical_feature=[X.shape[1] - 1])
+                categorical_feature=[X.shape[1] - 1],verbose =False)
         self.model = clf
         mse = metrics.mean_squared_error(y, self.model.predict(X))
         r2 = metrics.explained_variance_score(y, self.model.predict(X))

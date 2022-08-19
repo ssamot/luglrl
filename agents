@@ -1,5 +1,5 @@
-#agents.lugl.LUGLLightGBM
-agents.lugld.LUGLDLightGBM
+#agents.lugld.LUGLDLightGBM
+agents.lugl.LUGLLightGBM
 agents.luglb.LUGLBLightGBM
 #agents.lugl.LUGLDecisionTree
 #agents.luglb.LUGLBDecisionTree
