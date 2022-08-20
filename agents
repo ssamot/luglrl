@@ -1,4 +1,4 @@
-#agents.lugld.LUGLDLightGBM
+agents.lugld.LUGLDLightGBM
 agents.lugl.LUGLLightGBM
 agents.luglb.LUGLBLightGBM
 #agents.lugl.LUGLDecisionTree
@@ -8,6 +8,8 @@ agents.dqn.DQN
 
 #agents.luglpi.LUGLPILightGBM
 #agents.luglbv.LUGLVLightGBM
+#agents.luglbUCB.LUGLUCBLightGBM
+
 
 #agents.luglbv.LUGLVDecisionTree
 

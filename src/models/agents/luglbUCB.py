@@ -4,7 +4,7 @@ import numpy as np
 from open_spiel.python import rl_agent
 from open_spiel.python import rl_tools
 from sklearn import metrics
-from agents.luglb import LUGLDecisionTree, LUGLLightGBM
+from agents.luglb import LUGLBDecisionTree, LUGLBLightGBM
 from agents.utils import ReplayBuffer
 
 
@@ -173,8 +173,7 @@ class UCB(rl_agent.AbstractAgent):
                     self._step_size * loss)
             self._N[self._prev_info_state][self._prev_action] +=1
 
-            self._tbr[(self._prev_info_state, self._prev_action)] = \
-            self._q_values[self._prev_info_state][self._prev_action]
+            self._tbr[(self._prev_info_state, self._prev_action)] = target
 
             #self.update()
 
@@ -243,11 +242,11 @@ class UCB(rl_agent.AbstractAgent):
 
 
 class LUGLUCBLightGBM(UCB):
-    get_model_qs = LUGLLightGBM.get_model_qs
-    train_supervised = LUGLLightGBM.train_supervised
+    get_model_qs = LUGLBLightGBM.get_model_qs
+    train_supervised = LUGLBLightGBM.train_supervised
 
 
 class LUGLUCBDecisionTree(UCB):
-    get_model_qs = LUGLDecisionTree.get_model_qs
-    train_supervised = LUGLDecisionTree.train_supervised
+    get_model_qs = LUGLBDecisionTree.get_model_qs
+    train_supervised = LUGLBDecisionTree.train_supervised
 
