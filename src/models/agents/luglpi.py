@@ -194,18 +194,20 @@ class DCLF(rl_agent.AbstractAgent):
             self._q_values[self._prev_info_state][self._prev_action] += (
                     self._step_size * loss)
 
-            self._tbr[(self._prev_info_state, self._prev_action)] = target
-
-
             if (self._prev_info_state not in self._buffer):
                 self._buffer[self._prev_info_state] = [[] for _ in range(self._num_actions)]
 
-
-            self._buffer[self._prev_info_state][self._prev_action].append([
+            p = self._buffer[self._prev_info_state][self._prev_action]
+            p.append([
                 info_state, legal_actions,
                 time_step.rewards[self._player_id],
                 time_step.last()
             ])
+
+            if(len(p) > 20):
+                p.pop(0)
+                #print(len(p))
+
 
 
             #self.update()
@@ -294,8 +296,24 @@ class LUGLPILightGBM(DCLF):
 
         print(X.shape, y.shape)
         from lightgbm.sklearn import LGBMRegressor
-        clf = LGBMRegressor(n_jobs=6, n_estimators=1000)
-        clf.fit(X, y, categorical_feature=[X.shape[1]-1])
+        from sklearn.model_selection import train_test_split
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.10)
+        clf = LGBMRegressor(n_jobs=6,
+                            n_estimators=1000,
+                            num_leaves=200, linear_tree=True, verbose=-100)
+        clf.fit(X_train, y_train,
+                eval_set=[(X_test, y_test)],
+                early_stopping_rounds=100,
+                categorical_feature=[X.shape[1] - 1], verbose=False)
+        n_estimators_ = clf.best_iteration_
+        print(f"n_estimators = {n_estimators_}")
+
+        clf = LGBMRegressor(n_jobs=6, n_estimators=n_estimators_,
+                            num_leaves=200,
+                            linear_tree=True, verbose=-100)
+        clf.fit(X, y,
+                categorical_feature=[X.shape[1] - 1], verbose=False)
         self.model = clf
         mse = metrics.mean_squared_error(y, self.model.predict(X))
         r2 = metrics.explained_variance_score(y, self.model.predict(X))

@@ -64,8 +64,19 @@ class DCLFS(DCLF):
             self._q_values[self._prev_info_state][self._prev_action] += (
                     self._step_size * loss)
 
-            self._tbr[(self._prev_info_state, self._prev_action)] = target
+            #self._tbr[(self._prev_info_state, self._prev_action)] = target
 
+            #self._q_values[self._prev_info_state][self._prev_action] = target
+
+            sa = (self._prev_info_state, self._prev_action)
+            if (sa not in self._tbr):
+                self._tbr[sa] = []
+            v = self._tbr[sa]
+            v.append(target)
+
+            if (len(v) > 20):
+                #print(v)
+                v.pop(0)
 
 
             self._epsilon = self._epsilon_schedule.step()

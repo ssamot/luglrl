@@ -28,6 +28,7 @@ from open_spiel.python.algorithms import random_agent
 from scipy.stats import ttest_1samp
 from visualization.calculate_glicko2_scores import calculate_glicko_scores
 from run_tournament import run_tournament
+import pyspiel
 
 @click.command()
 @click.argument('game_name', type = click.STRING)
@@ -42,6 +43,7 @@ def main(game_name, agent_class, comparison_point,  training_episodes):
     env = rl_environment.Environment(game)
     num_actions = env.action_spec()["num_actions"]
     state_size = env.observation_spec()["info_state"][0]
+    current_game = pyspiel.load_game(game)
 
     module_name, class_name = agent_class.rsplit(".", 1)
     AgentClass = getattr(importlib.import_module(module_name), class_name)
@@ -123,6 +125,7 @@ def main(game_name, agent_class, comparison_point,  training_episodes):
             while not time_step.last():
                 player_id = time_step.observations["current_player"]
                 agents[player_id].state = env.get_state
+                agents[player_id].game = current_game
                 agent_output = agents[player_id].step(time_step)
                 time_step = env.step([agent_output.action])
 

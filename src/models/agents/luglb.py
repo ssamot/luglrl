@@ -166,7 +166,15 @@ class DCLF(rl_agent.AbstractAgent):
             self._q_values[self._prev_info_state][self._prev_action] += (
                     self._step_size * loss)
 
-            self._tbr[(self._prev_info_state, self._prev_action)] = target
+            sa = (self._prev_info_state, self._prev_action)
+            if (sa not in self._tbr):
+                self._tbr[sa] = []
+            v = self._tbr[sa]
+            v.append(target)
+
+            if (len(v) > 20):
+                # print(v)
+                v.pop(0)
 
             self.update()
 
@@ -214,7 +222,15 @@ class DCLF(rl_agent.AbstractAgent):
                 self._q_values[prev_info_state][prev_action] += (
                         self._step_size * loss)
 
-                self._tbr[(prev_info_state, prev_action)] = target
+                sa = (self._prev_info_state, self._prev_action)
+                if (sa not in self._tbr):
+                    self._tbr[sa] = []
+                v = self._tbr[sa]
+                v.append(target)
+
+                if (len(v) > 20):
+                    # print(v)
+                    v.pop(0)
                 # print(loss, target, self._q_values[prev_info_state][prev_action])
 
     @property
@@ -288,7 +304,7 @@ class LUGLBLightGBM(DCLF):
         for (state, action), Q in self._tbr.items():
             #for action, Q in enumerate(self._q_values[state]):
                 all_features.append(list(state) + [action])
-                all_Qs.append(Q)
+                all_Qs.append(np.mean(Q))
 
         X = np.array(all_features)
         y = np.array(all_Qs)

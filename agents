@@ -1,12 +1,12 @@
 agents.lugld.LUGLDLightGBM
 agents.lugl.LUGLLightGBM
-agents.luglb.LUGLBLightGBM
+#agents.luglb.LUGLBLightGBM
 #agents.lugl.LUGLDecisionTree
 #agents.luglb.LUGLBDecisionTree
 agents.dqn.DQN
 
 
-#agents.luglpi.LUGLPILightGBM
+agents.luglpi.LUGLPILightGBM
 #agents.luglbv.LUGLVLightGBM
 #agents.luglbUCB.LUGLUCBLightGBM
 

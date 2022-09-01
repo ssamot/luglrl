@@ -8,6 +8,7 @@ from sklearn import metrics
 from agents.utils import ReplayBuffer
 from agents.utils import LimitedSizeDict
 from collections import OrderedDict
+from open_spiel.python.algorithms import minimax, mcts
 
 
 class DCLF(rl_agent.AbstractAgent):
@@ -93,7 +94,7 @@ class DCLF(rl_agent.AbstractAgent):
                 size=self._num_actions) * 0.0001
 
             if(self.model is not None):
-                self._q_values[info_state][legal_actions] = self.get_model_qs( fs)
+                self._q_values[info_state][legal_actions] = self.get_model_qs(fs)
 
         q_values = self._q_values[info_state][legal_actions]
         greedy_q = np.argmax(q_values)
@@ -171,12 +172,18 @@ class DCLF(rl_agent.AbstractAgent):
             self._q_values[self._prev_info_state][self._prev_action] += (
                     self._step_size * loss)
 
-            if(info_state not in self._tbr):
-                self._tbr[info_state] = 0.0 + np.random.random() * 0.0001
+            # if(info_state not in self._tbr):
+            #    self._tbr[info_state] = 0.0 + np.random.random() * 0.0001
             #v_value = self._tbr[info_state]
             #loss = target - v_value
-            self._tbr[info_state] = target
-            self.update()
+            value = minimax.alpha_beta_search(self.game,
+                      state=self.state,
+                      value_function=self.value_function,
+                      maximum_depth=2,
+                      maximizing_player_id=self._player_id)
+            #print(value)
+            self._tbr[info_state] = value[0]
+            #self.update()
 
 
 
@@ -276,7 +283,12 @@ class LUGLVLightGBM(DCLF):
 
 
 
-
+    def value_function(self,state):
+        if(self.model is None):
+            return 0.0
+        obs = state.observation_tensor(self._player_id)
+        v_value = self.model.predict(np.array([obs]))
+        return v_value
 
     def train_supervised(self):
 
@@ -296,8 +308,24 @@ class LUGLVLightGBM(DCLF):
 
         print(X.shape, y.shape)
         from lightgbm.sklearn import LGBMRegressor
-        clf = LGBMRegressor(n_jobs=6, n_estimators=1000)
-        clf.fit(X, y)
+        from sklearn.model_selection import train_test_split
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.10)
+        clf = LGBMRegressor(n_jobs=6,
+                            n_estimators=1000,
+                            num_leaves=200, linear_tree=True, verbose=-100)
+
+        clf.fit(X_train, y_train,
+                eval_set=[(X_test, y_test)],
+                early_stopping_rounds=100, verbose=False)
+        n_estimators_ = clf.best_iteration_
+        print(f"n_estimators = {n_estimators_}")
+
+        clf = LGBMRegressor(n_jobs=6, n_estimators=n_estimators_,
+                            num_leaves=200,
+                            linear_tree=True, verbose=-100)
+        clf.fit(X, y, verbose=False)
         self.model = clf
         mse = metrics.mean_squared_error(y, self.model.predict(X))
         r2 = metrics.explained_variance_score(y, self.model.predict(X))
@@ -310,7 +338,6 @@ class LUGLVDecisionTree(DCLF):
     def get_model_qs(self, fs):
         q_values = self.model.predict(fs)
         return q_values
-
 
 
 

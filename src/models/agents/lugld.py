@@ -72,7 +72,7 @@ class DCLFS(DCLF):
 
             self._q_values[self._prev_info_state][self._prev_action] = target
 
-            self._tbr[(self._prev_info_state, self._prev_action)] = target
+            self._tbr[(self._prev_info_state, self._prev_action)] = [target]
             #print(target)
 
 
