@@ -51,8 +51,7 @@ def create_nn(input_shape, num_forms=2):
 
     model.compile(loss=keras.losses.mean_squared_error,
                   #optimizer=keras.optimizers.SGD(lr=0.01, momentum =0.9, nesterov = True),
-                  optimizer=keras.optimizers.Adam(lr=0.0001),
-
+                  optimizer=keras.optimizers.Adam(lr=0.001),
                   metrics=['mse'])
 
     return model, distanceModel, forms
@@ -72,7 +71,7 @@ if __name__ == '__main__':
         [0],
     ])
 
-    num_forms = 1
+    num_forms = 2
     model, distanceModel, forms = create_nn(2, num_forms=num_forms)
     print(x.shape, y.shape)
     # model.fit([x] + [ones]*num_forms, y, epochs = 10000)

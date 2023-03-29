@@ -20,7 +20,6 @@ class Hadamard(keras.layers.Layer):
         self.units = units
 
     def build(self, input_shape):
-        init = tf.constant_initializer(np.random.randint(2, size = input_shape[1:]))
         self.w = self.add_weight(
             shape=input_shape[1:],
             initializer="glorot_uniform",
@@ -35,6 +34,31 @@ class Hadamard(keras.layers.Layer):
     def get_example(self):
         print(self.w)
         return ((self.w))
+
+
+
+class InverseEucledian(keras.layers.Layer):
+
+
+
+    def __init__(self, units=1):
+        super(InverseEucledian, self).__init__()
+        self.units = units
+
+    def build(self, input_shape):
+        self.w = self.add_weight(
+            shape=input_shape[1:],
+            initializer="glorot_uniform",
+            trainable=True,
+        )
+
+    def call(self, inputs):
+        d = tf.norm(inputs-tf.sigmoid(self.w),keepdims=True,axis = -1) + K.epsilon()
+        return (1/d)
+
+    def get_example(self):
+        print(self.w)
+        return tf.sigmoid(self.w)
 
 
 def neg_mean_euc_dist(vects):
