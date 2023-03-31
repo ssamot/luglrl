@@ -11,7 +11,7 @@ from keras.layers import Dense, Input
 from models.agents.keras_helper import NNWeightHelper
 import cma
 from open_spiel.python.algorithms import minimax, mcts
-
+from sklearn.pipeline import Pipeline
 
 class DCLF(rl_agent.AbstractAgent):
     """Tabular Q-Learning agent.
@@ -260,7 +260,7 @@ class DCLF(rl_agent.AbstractAgent):
 
 
 
-class LUGLBLightGBM(DCLF):
+class LUGLVDL(DCLF):
 
 
     def get_model_qs(self, state_features, legal_actions):
@@ -275,11 +275,10 @@ class LUGLBLightGBM(DCLF):
             obs = child_state.observation_tensor(self._player_id)
             #print(str(child_state))
 
-            #obs = [ord(c) for c in str(child_state).split(":")[1]]
+            #obs = [ord(c) for c in str(child_state).split(":")[-1]]
 
             actions.append(obs)
 
-        actions = self.transformer.transform(actions)
         q_values = self.model.predict(actions)
 
         for t in terminal:
@@ -311,98 +310,143 @@ class LUGLBLightGBM(DCLF):
         X = np.array(all_features)
         y = np.array(all_Qs)
 
-        from sklearn.cross_decomposition import PLSRegression
-        from sklearn.kernel_approximation import RBFSampler
-        from sklearn.decomposition import PCA
-
-        transformer = PLSRegression(n_components=2000)
-        transformer = RBFSampler(n_components=1000)
-        transformer = PCA(n_components=X.shape[1])
-        transformer.fit(X)
-        print("transfrormer fitted")
-        X = transformer.transform(X)
-        print(X.shape)
-        self.transformer = transformer
-        from sklearn.linear_model import LassoLarsCV
-        clf = LassoLarsCV()
-        clf.fit(X,y)
-
-
-
-        # print(X.shape, y.shape)
-        # from lightgbm.sklearn import LGBMRegressor
-        # from sklearn.model_selection import train_test_split
-        # X_train, X_test, y_train, y_test = train_test_split(
-        #     X, y, test_size = 0.10)
-        # clf = LGBMRegressor(n_jobs=6,
-        #                     n_estimators=1000,
-        #                     num_leaves=200, linear_tree=True,
-        #                     verbose = -100)
-        # clf.fit(X_train, y_train,
-        #         eval_set=[(X_test, y_test)],
-        #         early_stopping_rounds=100, verbose =False)
-        # n_estimators_ = clf.best_iteration_
-        # print(f"n_estimators = {n_estimators_}")
-        #
-        #
-        # clf = LGBMRegressor(n_jobs=6, n_estimators=n_estimators_, num_leaves=200,
-        #                     linear_tree=True,verbose = -100,)
-        # clf.fit(X, y,verbose =False)
-        self.model = clf
-        mse = metrics.mean_squared_error(y, self.model.predict(X))
-        r2 = metrics.explained_variance_score(y, self.model.predict(X))
-
-        print(mse, r2)
-
-
-class LUGLBDecisionTree(DCLF):
-
-    def get_model_qs(self, state_features, legal_actions):
-
-
-        oh_action = np.zeros(shape=(len(legal_actions), self._num_actions  ))
-        #oh_action[legal_actions,list(range(self._num_actions))] = 1
-        #print(oh_action)
-        for i, a in enumerate(legal_actions): oh_action[i,a] = 1
-
-
-        feature_actions = [list(state_features) + list(a) for a in oh_action ]
-        #print(feature_actions)
-        q_values = self.model.predict(feature_actions)
-        #print(q_values.shape)
-
-        return q_values
-
-
-
-
-
-    def train_supervised(self):
-
-        print("About to start training")
-        all_features = []
-        all_Qs = []
-
-        # make targets!
-        #for self
-
-        for (state, action), Q in self._tbr.items():
-            #for action, Q in enumerate(self._q_values[state]):
-                oh_action = np.zeros(shape=self._num_actions)
-                oh_action[action] = 1
-                all_features.append(list(state) + list(oh_action))
-                all_Qs.append(Q)
-
-        X = np.array(all_features)
-        y = np.array(all_Qs)
-
+        #print(X)
         print(X.shape, y.shape)
-        from sklearn.tree import DecisionTreeRegressor
 
-        clf = DecisionTreeRegressor(min_samples_leaf=3)
-        clf.fit(X,y)
+        tree_encoder = DecisionTreeLeafEncoder(max_leaf_nodes=10000)
+        #tree_encoder = RandomForestLeafEncoder(max_leaf_nodes=20,n_jobs=4, n_estimators=10)
+        from sklearn.linear_model import RidgeCV, Ridge, LarsCV, ElasticNetCV, OrthogonalMatchingPursuitCV
+
+        clf = Pipeline(
+            steps=[
+                ('tree_encoder',tree_encoder),
+                ('regressor', Ridge(normalize=False))
+            ]
+        )
+
+        #clf = DecisionTreeRegressor(max_leaf_nodes=2000)
         self.model = clf
+        clf.fit(X,y)
+        #print(clf.steps[-1][-1].coef_)
         mse = metrics.mean_squared_error(y, self.model.predict(X))
         r2 = metrics.explained_variance_score(y, self.model.predict(X))
 
         print(mse, r2)
+
+
+
+
+
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.preprocessing import OneHotEncoder
+import numpy as np
+
+
+class DecisionTreeLeafEncoder(BaseEstimator, TransformerMixin):
+    def __init__(self, max_leaf_nodes=None):
+        self.max_leaf_nodes = max_leaf_nodes
+        self.tree_ = None
+        self.one_hot_ = None
+
+    def fit(self, X, y=None):
+        self.tree_ = DecisionTreeRegressor(max_leaf_nodes=self.max_leaf_nodes).fit(X, y)
+        leaf_nodes = self.tree_.apply(X)
+        self.one_hot_ = OneHotEncoder(categories='auto', sparse=False).fit(
+            leaf_nodes.reshape(-1, 1))
+        return self
+
+    def transform(self, X, y=None):
+        leaf_nodes = self.tree_.apply(X)
+        leaf_encodings = self.one_hot_.transform(leaf_nodes.reshape(-1, 1))
+        #print("decision tree features", X.shape)
+        original_features = np.array(X)
+        return np.hstack([original_features, leaf_encodings])
+
+
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import OneHotEncoder
+import numpy as np
+
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
+from sklearn.preprocessing import OneHotEncoder
+import numpy as np
+
+
+class RandomForestLeafEncoder(BaseEstimator, TransformerMixin):
+    def __init__(self, n_estimators=100, max_leaf_nodes=2, n_jobs=None):
+        self.n_estimators = n_estimators
+        self.max_leaf_nodes = max_leaf_nodes
+        self.n_jobs = n_jobs
+        self.forest_ = None
+        self.one_hot_ = None
+
+    def fit(self, X, y=None):
+        self.forest_ = ExtraTreesRegressor(
+            n_estimators=self.n_estimators,
+            max_leaf_nodes=self.max_leaf_nodes,
+            n_jobs=self.n_jobs
+        ).fit(X, y)
+        leaf_nodes = self.forest_.apply(X)
+        self.one_hot_ = OneHotEncoder(categories='auto', sparse=False).fit(
+            leaf_nodes)
+        return self
+
+    def transform(self, X, y=None):
+        leaf_nodes = self.forest_.apply(X)
+        leaf_encodings = self.one_hot_.transform(leaf_nodes)
+        original_features = np.array(X)
+        return np.hstack([original_features, leaf_encodings])
+
+#
+# from sklearn.base import BaseEstimator, TransformerMixin
+# from sklearn.tree import DecisionTreeClassifier
+# import numpy as np
+#
+#
+# class TreeLeafEncoder(BaseEstimator, TransformerMixin):
+#     """
+#     A sklearn transformer that uses the leafs of a decision tree as features,
+#     after target encoding them, without using pandas.
+#     """
+#
+#     def __init__(self, max_leaf_nodes=3, random_state=None):
+#         self.max_leaf_nodes = max_leaf_nodes
+#         self.random_state = random_state
+#         self.tree = None
+#         self.target_mean = None
+#
+#     def fit(self, X, y):
+#         # Fit a decision tree classifier
+#         self.tree = DecisionTreeRegressor(max_leaf_nodes=self.max_leaf_nodes,
+#                                            random_state=self.random_state)
+#         self.tree.fit(X, y)
+#
+#         # Target encode the leaf nodes
+#         leaf_indices = self.tree.apply(X)
+#         self.target_mean = {}
+#         for i in range(leaf_indices.shape[0]):
+#             col = leaf_indices[ i]
+#             for j in range(self.tree.tree_.n_node_samples.shape[0]):
+#                 if self.tree.tree_.n_node_samples[j] != 0:
+#                     self.target_mean[(i, j)] = y[col == j].mean()
+#         return self
+#
+#     def transform(self, X):
+#         # Target encode the leaf nodes of the fitted decision tree
+#         leaf_indices = self.tree.apply(X)
+#         X_transformed = []
+#         for i in range(leaf_indices.shape[0]):
+#             col = leaf_indices[i]
+#             encoded_col = []
+#             for j in range(self.tree.tree_.n_node_samples.shape[0]):
+#                 if self.tree.tree_.n_node_samples[j] != 0:
+#                     encoded_col.append(col == j)
+#             encoded_col = np.column_stack(
+#                 [self.target_mean.get((i, j), np.nan) for j in
+#                  range(self.tree.tree_.n_node_samples.shape[0]) if
+#                  self.tree.tree_.n_node_samples[j] != 0])
+#             X_transformed.append(encoded_col)
+#         return np.hstack(X_transformed)

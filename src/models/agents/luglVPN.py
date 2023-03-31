@@ -10,6 +10,22 @@ import keras
 from keras.layers import Dense, Input
 from models.agents.keras_helper import NNWeightHelper
 import cma
+from open_spiel.python.algorithms import minimax, mcts
+from lightgbm.sklearn import LGBMRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression, Ridge, SGDRegressor
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.pipeline import Pipeline
+
+from tensorflow import keras
+
+import keras.backend as K
+
+
+def outer_product(inputs):
+    # inputs is a list of two tensors of shape (batch_size, num_features)
+    return K.expand_dims(inputs[0], axis=2) * K.expand_dims(inputs[1],
+                                                            axis=1)
 
 
 class DCLF(rl_agent.AbstractAgent):
@@ -50,7 +66,6 @@ class DCLF(rl_agent.AbstractAgent):
         self._q_values = OrderedDict()
         self._tbr = OrderedDict()
 
-        self.episode_states = []
         self._reset_dict()
 
 
@@ -172,6 +187,19 @@ class DCLF(rl_agent.AbstractAgent):
 
 
 
+            self._q_values[self._prev_info_state][self._prev_action] = target
+
+
+            sa = (self._prev_info_state, self._prev_action)
+            if (sa not in self._tbr):
+                self._tbr[sa] = []
+            v = self._tbr[sa]
+            v.append([target, np.array(self._prev_info_next_state, dtype = np.uint8)])
+
+            if (len(v) > 20):
+                #print(v)
+                v.pop(0)
+            #print(target)
 
 
             self._epsilon = self._epsilon_schedule.step()
@@ -181,22 +209,9 @@ class DCLF(rl_agent.AbstractAgent):
                 self._n_games += 1
                 # print(self.episode_length)
                 self.episode_length = 0
-                for s, a, s_next in self.episode_states:
-                    sa = (s, a)
-                    if (sa not in self._tbr):
-                        self._tbr[sa] = []
-                    v = self._tbr[sa]
-                    v.append([target, s_next ])
-
-                    if (len(v) > 20):
-                        # print(v)
-                        v.pop(0)
-                #print(self._tbr)
-                self.episode_states = []
+                # print(time_step.rewards, "rewards")
+                # exit()
                 return
-            else:
-                self.episode_states.append(
-                    (self._prev_info_state, self._prev_action, self._prev_info_next_state))
 
         # Don't mess up with the state during evaluation.
         if not is_evaluation:
@@ -205,7 +220,12 @@ class DCLF(rl_agent.AbstractAgent):
             #print(self.state)
             child_state = self.state.clone()
             child_state.apply_action(action)
+            #print(child_state)
             obs = child_state.observation_tensor(self._player_id)
+
+            #obs = [ord(c) for c in str(child_state).split(":")[-1]]
+            #print(len(obs))
+            #print(child_state)
             self._prev_info_next_state = tuple(obs)
 
         return rl_agent.StepOutput(action=action, probs=probs)
@@ -245,6 +265,7 @@ class DCLF(rl_agent.AbstractAgent):
                 break
 
 
+        #print(len(self._tbr), "tbr")
 
 
 
@@ -254,23 +275,32 @@ class DCLF(rl_agent.AbstractAgent):
 
 
 
-class LUGLBLightGBM(DCLF):
+class LUGLVPN(DCLF):
+
 
     def get_model_qs(self, state_features, legal_actions):
 
-
         actions = []
-
-        for action in legal_actions:
+        terminal = []
+        for i, action in enumerate(legal_actions):
             child_state = self.state.clone()
             child_state.apply_action(action)
+            if child_state.is_terminal():
+                terminal.append([i, child_state.player_return(self._player_id)])
             obs = child_state.observation_tensor(self._player_id)
+            #print(str(child_state))
+
+            #obs = [ord(c) for c in str(child_state).split(":")[-1]]
+
             actions.append(obs)
 
-        feature_actions = [list([0]) + a for a in actions]
-        #print(feature_actions)
-        q_values = self.model.predict(feature_actions)
-        #print(q_values.shape)
+        q_values = self.model(np.array(actions))
+        q_values = (q_values.numpy()).T[0]
+
+
+        for t in terminal:
+            q_values[t[0]] = t[1]
+
 
         return q_values
 
@@ -291,84 +321,78 @@ class LUGLBLightGBM(DCLF):
             #for action, Q in enumerate(self._q_values[state]):
                 Q = [qf[0] for qf in q_fstates]
                 f_state = q_fstates[0][1]
-                all_features.append(list([0]) + list(f_state))
+                all_features.append(list(f_state))
                 all_Qs.append(np.mean(Q))
 
         X = np.array(all_features)
         y = np.array(all_Qs)
 
+        #print(X)
         print(X.shape, y.shape)
-        from lightgbm.sklearn import LGBMRegressor
-        from sklearn.model_selection import train_test_split
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size = 0.10)
-        clf = LGBMRegressor(n_jobs=6,
-                            n_estimators=1000,
-                            num_leaves=200, linear_tree=True,verbose = -100)
-        clf.fit(X_train, y_train,
-                eval_set=[(X_test, y_test)],
-                early_stopping_rounds=100, verbose =False)
-        n_estimators_ = clf.best_iteration_
-        print(f"n_estimators = {n_estimators_}")
 
-        clf = LGBMRegressor(n_jobs=6, n_estimators=n_estimators_, num_leaves=200,
-                            linear_tree=True,verbose = -100)
-        clf.fit(X, y,verbose =False)
+
+
+        #from agents.helpers.hadamard import Hadamard,OuterProductLayer, TopK
+
+
+        input = keras.layers.Input(shape=X.shape[1])
+
+
+
+        # time distributed
+
+        # layers = []
+        #
+        # for i in range(0, 3):
+        #     x = Hadamard(activation="linear", l1=0.0001)(input)
+        #     #x = TopK(k=5, axis=-1)(x)
+        #     layers.append(x)
+        # # regularizer stops divergence
+
+
+        # create the lambda layer
+        outer_product_layer = keras.layers.Lambda(outer_product)
+
+
+        outer_product_layer = keras.layers.Lambda(outer_product)
+
+        n_neurons = 40
+
+        l = [input, keras.layers.Dense(n_neurons, activation="linear")(input)]
+        for i in range(4):
+            x = outer_product_layer([l[-1], l[-2]])
+            x = keras.layers.Flatten()(x)
+            x = keras.layers.BatchNormalization()(x)
+            x = keras.layers.Dense(n_neurons, activation="linear")(x)
+            l.append(x)
+            #x = Hadamard(activation="linear", l1=0.0001)(x)
+
+
+        x = keras.layers.concatenate(l)
+
+        #x = keras.layers.Dense(1000, activation="tanh")(input)
+        output = keras.layers.Dense(1, activation="linear")(x)
+        model = keras.Model(inputs=input, outputs=output)
+
+        print(model.summary())
+
+        model.compile(optimizer="adam",
+                      jit_compile=False,
+                      loss="mse")
+        clf = model
+
+
+        # X_train, X_test, y_train, y_test = train_test_split(
+        #     X, y, test_size = 0.10)
+
+        clf.fit(X,y,  epochs = 10)
+
         self.model = clf
         mse = metrics.mean_squared_error(y, self.model.predict(X))
-        r2 = metrics.explained_variance_score(y, self.model.predict(X))
-
-        print(mse, r2)
 
 
-class LUGLBDecisionTree(DCLF):
+        #mse_test = metrics.mean_squared_error(y_test, self.model.predict(X_test))
 
-    def get_model_qs(self, state_features, legal_actions):
+        print(mse)
+        #exit()
 
-
-        oh_action = np.zeros(shape=(len(legal_actions), self._num_actions  ))
-        #oh_action[legal_actions,list(range(self._num_actions))] = 1
-        #print(oh_action)
-        for i, a in enumerate(legal_actions): oh_action[i,a] = 1
-
-
-        feature_actions = [list(state_features) + list(a) for a in oh_action ]
-        #print(feature_actions)
-        q_values = self.model.predict(feature_actions)
-        #print(q_values.shape)
-
-        return q_values
-
-
-
-
-
-    def train_supervised(self):
-
-        print("About to start training")
-        all_features = []
-        all_Qs = []
-
-        # make targets!
-        #for self
-
-        for (state, action), Q in self._tbr.items():
-            #for action, Q in enumerate(self._q_values[state]):
-                oh_action = np.zeros(shape=self._num_actions)
-                oh_action[action] = 1
-                all_features.append(list(state) + list(oh_action))
-                all_Qs.append(Q)
-
-        X = np.array(all_features)
-        y = np.array(all_Qs)
-
-        print(X.shape, y.shape)
-        from sklearn.tree import DecisionTreeRegressor
-
-        clf = DecisionTreeRegressor(min_samples_leaf=3)
-        clf.fit(X,y)
-        self.model = clf
-        mse = metrics.mean_squared_error(y, self.model.predict(X))
-        r2 = metrics.explained_variance_score(y, self.model.predict(X))
-
-        print(mse, r2)
