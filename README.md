@@ -10,6 +10,11 @@ There are multiple agents in the repo, and the whole framework is based on https
 - LUGLPILightGBM, LightGBM agent, does approximate policy iteration
 - LUGLVLightGBM, LightGBM agent, uses V values instead of Q-values (i.e. doing one step lookaheads)
 
+There are two more agents, which I have not trained properly yet
+
+- LUGLVDL, which uses linear regression with features extracted from the leafs of a decision tree ( a well known method from kaggle winners)
+- LUGLVPM, which uses a fancy NN termed polynomial (does not need an activation, it approximates polynomial regression). I've rediscovered this before realising the ideas has been floating since 2020
+
 The agents perform better vs DQN, but this could simply be due to hyperparameter tuning. 
 
 ## Example results
@@ -23,15 +28,12 @@ The agents perform better vs DQN, but this could simply be due to hyperparameter
 ```bibtex
 @article{ssamot,
   author    = {Spyridon Samothrakis et. al. },
-  title     = {Local updates, global learning (LUGL): training
-non-neural methods incrementally},
+  title     = {Local updates, global learning (LUGL): Reinforcement Learning with non-neural non-neural methods},
   journal   = {To be submitted},
-  volume    = {notyet},
+  url    = {https://github.com/ssamot/luglrl},
   year      = {2023}
 }
-
-
-
+```
 
 
 
