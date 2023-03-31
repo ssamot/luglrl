@@ -31,7 +31,7 @@ This command uses the saved results from the tournaments in the "data/interim/to
 - `hex.png` ![hex](/reports/figures/hex.png)
 - `othello.png` ![othello](/reports/figures/othello.png)
 - `tic_tac_toe.png` ![tic-tac-toe](/reports/figures/tic_tac_toe.png)
-- `connect_four.pdf` ![connect-4](/reports/figures/connect_four.pdf)
+- `connect_four.pdf` ![connect-4](/reports/figures/connect_four.png)
 
 @article{ssamot,
   author    = {Spyridon Samothrakis et. al. },
