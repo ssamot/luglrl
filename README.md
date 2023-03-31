@@ -28,10 +28,10 @@ This command uses the saved results from the tournaments in the "data/interim/to
 
 ### Example results
 
-- `hex.png` ![hex](/report/figures/hex.png)
-- `othello.png` ![othello](/report/figures/othello.png)
-- `tic_tac_toe.png` ![tic-tac-toe](/report/figures/tic_tac_toe.png)
-- `connect_four.pdf` ![connect-4](/report/figures/connect_four.pdf)
+- `hex.png` ![hex](/reports/figures/hex.png)
+- `othello.png` ![othello](/reports/figures/othello.png)
+- `tic_tac_toe.png` ![tic-tac-toe](/reports/figures/tic_tac_toe.png)
+- `connect_four.pdf` ![connect-4](/reports/figures/connect_four.pdf)
 
 @article{ssamot,
   author    = {Spyridon Samothrakis et. al. },
