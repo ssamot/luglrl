@@ -33,6 +33,8 @@ This command uses the saved results from the tournaments in the "data/interim/to
 - `tic_tac_toe.png` ![tic-tac-toe](/reports/figures/tic_tac_toe.png)
 - `connect_four.pdf` ![connect-4](/reports/figures/connect_four.png)
 
+
+```bibtex
 @article{ssamot,
   author    = {Spyridon Samothrakis et. al. },
   title     = {Local updates, global learning (LUGL): training
